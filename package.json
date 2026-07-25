@@ -2,8 +2,9 @@
   "name": "backend",
   "version": "0.0.1",
   "description": "",
-  "author": "",
+  "author": "Kertoip",
   "private": true,
+  "packageManager": "pnpm@10.34.4",
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
@@ -18,7 +19,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "prepare": "lefthook install"
+    "prepare": "lefthook install || true"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

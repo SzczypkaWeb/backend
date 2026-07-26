@@ -13,4 +13,8 @@ export class UsersService {
   create(dto: CreateUserDto) {
     return this.prisma.user.create({ data: dto });
   }
+
+  remove(id: string) {
+    return this.prisma.user.delete({ where: { id } });
+  }
 }

@@ -1,5 +1,5 @@
-import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { Transform, TransformFnParams, Type } from 'class-transformer';
+import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 // Query params for GET /users. `page`/`limit` are transformed from the raw
 // query strings into numbers (see ValidationPipe's `transform: true` option
@@ -18,8 +18,15 @@ export class FindUsersQueryDto {
   @Max(100)
   limit: number = 10;
 
-  // Partial, case-insensitive match against the user's email.
+  // Partial, case-insensitive match against the user's email. Surrounding
+  // whitespace is trimmed before validation so a value like "  a@b.com  "
+  // isn't rejected/queried with leading/trailing spaces, and length is capped
+  // to keep the query parameter bounded.
   @IsOptional()
+  @Transform(({ value }: TransformFnParams): unknown =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
+  @MaxLength(255)
   search?: string;
 }

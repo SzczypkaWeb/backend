@@ -82,6 +82,38 @@ describe('UsersService', () => {
       expect(result).toEqual({ data: users, total: 1, page: 1, limit: 10, totalPages: 1 });
     });
 
+    it('trims surrounding whitespace from the search value before querying', async () => {
+      const users = [{ id: '2', email: 'test@example.com', createdAt: new Date() }];
+      prismaService.user.findMany.mockResolvedValue(users);
+      prismaService.user.count.mockResolvedValue(1);
+      const query: FindUsersQueryDto = { page: 1, limit: 10, search: '  TEST  ' };
+
+      await service.findAll(query);
+
+      const expectedWhere = { email: { contains: 'TEST', mode: 'insensitive' } };
+      expect(prismaService.user.findMany).toHaveBeenCalledWith({
+        where: expectedWhere,
+        skip: 0,
+        take: 10,
+      });
+      expect(prismaService.user.count).toHaveBeenCalledWith({ where: expectedWhere });
+    });
+
+    it('treats a whitespace-only search as no filter', async () => {
+      prismaService.user.findMany.mockResolvedValue([]);
+      prismaService.user.count.mockResolvedValue(0);
+      const query: FindUsersQueryDto = { page: 1, limit: 10, search: '   ' };
+
+      await service.findAll(query);
+
+      expect(prismaService.user.findMany).toHaveBeenCalledWith({
+        where: undefined,
+        skip: 0,
+        take: 10,
+      });
+      expect(prismaService.user.count).toHaveBeenCalledWith({ where: undefined });
+    });
+
     it('returns 0 total pages when there are no matching results', async () => {
       prismaService.user.findMany.mockResolvedValue([]);
       prismaService.user.count.mockResolvedValue(0);

@@ -13,7 +13,11 @@ export class UsersService {
     // passed in directly (e.g. from a caller that bypassed the ValidationPipe).
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
-    const search = query.search;
+    // Trim defensively here too (in addition to the DTO's @Transform), in
+    // case this is called with a query object that bypassed the
+    // ValidationPipe, so a whitespace-only search never falls through as a
+    // truthy filter.
+    const search = query.search?.trim();
 
     const where = search
       ? { email: { contains: search, mode: 'insensitive' as const } }

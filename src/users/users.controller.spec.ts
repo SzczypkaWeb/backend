@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
@@ -26,6 +27,32 @@ describe('UsersController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  describe('findAll', () => {
+    it('forwards the (already validated/transformed) query DTO to the service', async () => {
+      const query: FindUsersQueryDto = { page: 2, limit: 5 };
+      const paginated = { data: [], total: 0, page: 2, limit: 5, totalPages: 0 };
+      usersService.findAll.mockResolvedValue(paginated);
+
+      const result = await controller.findAll(query);
+
+      expect(usersService.findAll).toHaveBeenCalledWith(query);
+      expect(usersService.findAll).toHaveBeenCalledTimes(1);
+      expect(result).toEqual(paginated);
+    });
+
+    it('forwards the search filter to the service', async () => {
+      const query: FindUsersQueryDto = { page: 1, limit: 10, search: 'example.com' };
+      const user = { id: '1', email: 'a@example.com', createdAt: new Date() };
+      const paginated = { data: [user], total: 1, page: 1, limit: 10, totalPages: 1 };
+      usersService.findAll.mockResolvedValue(paginated);
+
+      const result = await controller.findAll(query);
+
+      expect(usersService.findAll).toHaveBeenCalledWith(query);
+      expect(result).toEqual(paginated);
+    });
   });
 
   describe('findOne', () => {

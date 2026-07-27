@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
+import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 
@@ -13,6 +14,7 @@ describe('UsersService', () => {
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      count: jest.fn(),
     },
   };
 
@@ -27,6 +29,67 @@ describe('UsersService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('findAll', () => {
+    it('applies the default pagination (page 1, limit 10) when no query is given', async () => {
+      const users = [{ id: '1', email: 'a@example.com', createdAt: new Date() }];
+      prismaService.user.findMany.mockResolvedValue(users);
+      prismaService.user.count.mockResolvedValue(1);
+
+      const result = await service.findAll();
+
+      expect(prismaService.user.findMany).toHaveBeenCalledWith({
+        where: undefined,
+        skip: 0,
+        take: 10,
+      });
+      expect(prismaService.user.count).toHaveBeenCalledWith({ where: undefined });
+      expect(result).toEqual({ data: users, total: 1, page: 1, limit: 10, totalPages: 1 });
+    });
+
+    it('computes skip/take from the requested page and limit', async () => {
+      const users = [{ id: '3', email: 'c@example.com', createdAt: new Date() }];
+      prismaService.user.findMany.mockResolvedValue(users);
+      prismaService.user.count.mockResolvedValue(25);
+      const query: FindUsersQueryDto = { page: 3, limit: 10 };
+
+      const result = await service.findAll(query);
+
+      expect(prismaService.user.findMany).toHaveBeenCalledWith({
+        where: undefined,
+        skip: 20,
+        take: 10,
+      });
+      expect(result).toEqual({ data: users, total: 25, page: 3, limit: 10, totalPages: 3 });
+    });
+
+    it('filters by a case-insensitive partial email match when search is provided', async () => {
+      const users = [{ id: '2', email: 'test@example.com', createdAt: new Date() }];
+      prismaService.user.findMany.mockResolvedValue(users);
+      prismaService.user.count.mockResolvedValue(1);
+      const query: FindUsersQueryDto = { page: 1, limit: 10, search: 'TEST' };
+
+      const result = await service.findAll(query);
+
+      const expectedWhere = { email: { contains: 'TEST', mode: 'insensitive' } };
+      expect(prismaService.user.findMany).toHaveBeenCalledWith({
+        where: expectedWhere,
+        skip: 0,
+        take: 10,
+      });
+      expect(prismaService.user.count).toHaveBeenCalledWith({ where: expectedWhere });
+      expect(result).toEqual({ data: users, total: 1, page: 1, limit: 10, totalPages: 1 });
+    });
+
+    it('returns 0 total pages when there are no matching results', async () => {
+      prismaService.user.findMany.mockResolvedValue([]);
+      prismaService.user.count.mockResolvedValue(0);
+
+      const result = await service.findAll({ page: 1, limit: 10, search: 'nobody' });
+
+      expect(result).toEqual({ data: [], total: 0, page: 1, limit: 10, totalPages: 0 });
+    });
   });
 
   describe('findOne', () => {

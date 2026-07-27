@@ -19,4 +19,13 @@ describe('AppController', () => {
       expect(appController.getHello()).toBe('Hello World!');
     });
   });
+
+  describe('version', () => {
+    it('should return version object with version string', () => {
+      const result = appController.getVersion();
+      expect(result).toHaveProperty('version');
+      expect(typeof result.version).toBe('string');
+      expect(result.version).toBe('0.0.1');
+    });
+  });
 });

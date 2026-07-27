@@ -17,3 +17,12 @@ model User {
   email     String   @unique
   createdAt DateTime @default(now())
 }
+
+model Listing {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  // Price stored in cents (integer) to avoid floating-point rounding issues.
+  price       Int
+  createdAt   DateTime @default(now())
+}

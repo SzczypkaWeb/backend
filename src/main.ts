@@ -8,7 +8,9 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 3000);
 
-  app.useGlobalPipes(new ValidationPipe());
+  // `transform: true` lets DTOs (e.g. FindUsersQueryDto) convert incoming
+  // query strings (page, limit) into the numbers the handlers expect.
+  app.useGlobalPipes(new ValidationPipe({ transform: true }));
   app.enableCors({ origin: 'http://localhost:8080' });
   await app.listen(port);
 }

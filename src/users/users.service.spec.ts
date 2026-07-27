@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 
 describe('UsersService', () => {
@@ -10,6 +11,7 @@ describe('UsersService', () => {
       findMany: jest.fn(),
       findUnique: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
       delete: jest.fn(),
     },
   };
@@ -49,6 +51,47 @@ describe('UsersService', () => {
       expect(prismaService.user.findUnique).toHaveBeenCalledWith({
         where: { id },
       });
+    });
+  });
+
+  describe('update', () => {
+    it('is idempotent: sending the same PATCH body twice yields the same final state', async () => {
+      const id = 'user-123';
+      const existingUser = { id, email: 'old@example.com', createdAt: new Date('2024-01-01') };
+      const dto: UpdateUserDto = { email: 'new@example.com' };
+
+      // A minimal stateful fake so the test actually verifies the resulting
+      // resource state, rather than just recording call arguments. If the
+      // implementation ever used increment/append semantics instead of
+      // overwriting with fixed values, applying the same PATCH twice would
+      // produce a different second result and this test would catch it.
+      let record = { ...existingUser };
+      prismaService.user.findUnique.mockImplementation(() => Promise.resolve(record));
+      prismaService.user.update.mockImplementation(({ data }: { data: UpdateUserDto }) => {
+        record = { ...record, ...data };
+        return Promise.resolve(record);
+      });
+
+      const first = await service.update(id, dto);
+      const second = await service.update(id, dto);
+
+      expect(first).toEqual(second);
+      expect(record).toEqual({ ...existingUser, ...dto });
+      expect(prismaService.user.update).toHaveBeenCalledTimes(2);
+      expect(prismaService.user.update).toHaveBeenNthCalledWith(1, { where: { id }, data: dto });
+      expect(prismaService.user.update).toHaveBeenNthCalledWith(2, { where: { id }, data: dto });
+    });
+
+    it('throws NotFoundException when the user does not exist', async () => {
+      const id = 'missing-id';
+      const dto: UpdateUserDto = { email: 'new@example.com' };
+      prismaService.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.update(id, dto)).rejects.toThrow(NotFoundException);
+      expect(prismaService.user.findUnique).toHaveBeenCalledWith({
+        where: { id },
+      });
+      expect(prismaService.user.update).not.toHaveBeenCalled();
     });
   });
 });

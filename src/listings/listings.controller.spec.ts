@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { FindListingsQueryDto } from './dto/find-listings-query.dto';
@@ -8,6 +9,7 @@ describe('ListingsController', () => {
   let controller: ListingsController;
   const listingsService = {
     findAll: jest.fn(),
+    findOne: jest.fn(),
     create: jest.fn(),
   };
 
@@ -53,6 +55,33 @@ describe('ListingsController', () => {
       const result = await controller.findAll(query);
 
       expect(result).toEqual(paginated);
+    });
+  });
+
+  describe('findOne', () => {
+    const listingId = '123e4567-e89b-12d3-a456-426614174000';
+    const mockListing = {
+      id: listingId,
+      title: 'Sofa',
+      description: 'Comfy sofa',
+      price: 19999,
+      createdAt: new Date(),
+    };
+
+    it('returns a listing when found', async () => {
+      listingsService.findOne.mockResolvedValue(mockListing);
+
+      const result = await controller.findOne(listingId);
+
+      expect(listingsService.findOne).toHaveBeenCalledWith(listingId);
+      expect(listingsService.findOne).toHaveBeenCalledTimes(1);
+      expect(result).toEqual(mockListing);
+    });
+
+    it('throws NotFoundException when listing is not found', async () => {
+      listingsService.findOne.mockResolvedValue(null);
+
+      await expect(controller.findOne(listingId)).rejects.toThrow(NotFoundException);
     });
   });
 

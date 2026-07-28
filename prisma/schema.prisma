@@ -24,5 +24,6 @@ model Listing {
   description String
   // Price stored in cents (integer) to avoid floating-point rounding issues.
   price       Int
+  location    String   @default("")
   createdAt   DateTime @default(now())
 }

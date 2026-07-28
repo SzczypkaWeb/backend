@@ -44,4 +44,40 @@ describe('FindListingsQueryDto', () => {
     expect(errors).toHaveLength(1);
     expect(errors[0].constraints).toHaveProperty('min');
   });
+
+  it('accepts an optional q (search query) parameter', async () => {
+    const dto = plainToInstance(FindListingsQueryDto, { q: 'sofa' });
+
+    const errors = await validate(dto);
+
+    expect(errors).toHaveLength(0);
+    expect(dto.q).toBe('sofa');
+  });
+
+  it('defaults to undefined for q when omitted', async () => {
+    const dto = plainToInstance(FindListingsQueryDto, {});
+
+    const errors = await validate(dto);
+
+    expect(errors).toHaveLength(0);
+    expect(dto.q).toBeUndefined();
+  });
+
+  it('accepts an optional location parameter', async () => {
+    const dto = plainToInstance(FindListingsQueryDto, { location: 'Warsaw' });
+
+    const errors = await validate(dto);
+
+    expect(errors).toHaveLength(0);
+    expect(dto.location).toBe('Warsaw');
+  });
+
+  it('defaults to undefined for location when omitted', async () => {
+    const dto = plainToInstance(FindListingsQueryDto, {});
+
+    const errors = await validate(dto);
+
+    expect(errors).toHaveLength(0);
+    expect(dto.location).toBeUndefined();
+  });
 });

@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, Max, Min, IsString } from 'class-validator';
 
 // Query params for GET /listings. `page`/`limit` are transformed from the raw
 // query strings into numbers (see ValidationPipe's `transform: true` option
@@ -18,4 +18,12 @@ export class FindListingsQueryDto {
   @Min(1)
   @Max(100)
   limit: number = 10;
+
+  @IsOptional()
+  @IsString()
+  q?: string;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
 }

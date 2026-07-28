@@ -48,6 +48,7 @@ describe('ListingsController', () => {
         title: 'Sofa',
         description: 'Comfy sofa',
         price: 19999,
+        location: 'Warsaw',
         createdAt: new Date(),
       };
       const paginated = { data: [listing], total: 1, page: 1, limit: 10, totalPages: 1 };
@@ -66,6 +67,7 @@ describe('ListingsController', () => {
       title: 'Sofa',
       description: 'Comfy sofa',
       price: 19999,
+      location: 'Warsaw',
       createdAt: new Date(),
     };
 
@@ -93,7 +95,7 @@ describe('ListingsController', () => {
         description: 'Comfy sofa',
         price: 19999,
       };
-      const created = { id: '1', ...dto, createdAt: new Date() };
+      const created = { id: '1', ...dto, location: '', createdAt: new Date() };
       listingsService.create.mockResolvedValue(created);
 
       const result = await controller.create(dto);

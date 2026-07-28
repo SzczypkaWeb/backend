@@ -81,8 +81,19 @@ export class ListingsService {
     };
   }
 
-  findOne(id: string) {
-    return this.prisma.listing.findUnique({ where: { id } });
+  async findOne(id: string) {
+    try {
+      return await this.prisma.listing.update({
+        where: { id },
+        data: { viewCount: { increment: 1 } },
+      });
+    } catch (error) {
+      const prismaError = error as { code?: string };
+      if (prismaError?.code === 'P2025') {
+        return null;
+      }
+      throw error;
+    }
   }
 
   create(dto: CreateListingDto) {

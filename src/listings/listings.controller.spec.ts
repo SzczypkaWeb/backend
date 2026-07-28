@@ -11,6 +11,7 @@ describe('ListingsController', () => {
     findAll: jest.fn(),
     findOne: jest.fn(),
     create: jest.fn(),
+    remove: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -100,6 +101,28 @@ describe('ListingsController', () => {
       expect(listingsService.create).toHaveBeenCalledWith(dto);
       expect(listingsService.create).toHaveBeenCalledTimes(1);
       expect(result).toEqual(created);
+    });
+  });
+
+  describe('remove', () => {
+    const listingId = '123e4567-e89b-12d3-a456-426614174000';
+
+    it('calls listingsService.remove with the listing id', async () => {
+      listingsService.remove = jest.fn().mockResolvedValue(undefined);
+
+      await controller.remove(listingId);
+
+      expect(listingsService.remove).toHaveBeenCalledWith(listingId);
+      expect(listingsService.remove).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws NotFoundException when listing is not found', async () => {
+      const removeErrorMessage = `Listing with id ${listingId} not found`;
+      listingsService.remove = jest
+        .fn()
+        .mockRejectedValue(new NotFoundException(removeErrorMessage));
+
+      await expect(controller.remove(listingId)).rejects.toThrow(NotFoundException);
     });
   });
 });

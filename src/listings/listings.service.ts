@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { FindListingsQueryDto } from './dto/find-listings-query.dto';
@@ -36,5 +36,17 @@ export class ListingsService {
 
   create(dto: CreateListingDto) {
     return this.prisma.listing.create({ data: dto });
+  }
+
+  async remove(id: string) {
+    try {
+      return await this.prisma.listing.delete({ where: { id } });
+    } catch (error) {
+      const prismaError = error as { code?: string };
+      if (prismaError?.code === 'P2025') {
+        throw new NotFoundException(`Listing with id ${id} not found`);
+      }
+      throw error;
+    }
   }
 }

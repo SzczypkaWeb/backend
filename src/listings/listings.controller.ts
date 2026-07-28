@@ -1,4 +1,14 @@
-import { Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+  HttpCode,
+} from '@nestjs/common';
 import { ListingsService } from './listings.service';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { FindListingsQueryDto } from './dto/find-listings-query.dto';
@@ -24,5 +34,11 @@ export class ListingsController {
   @Post()
   create(@Body() dto: CreateListingDto) {
     return this.listingsService.create(dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  remove(@Param('id') id: string) {
+    return this.listingsService.remove(id);
   }
 }

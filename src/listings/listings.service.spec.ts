@@ -11,6 +11,7 @@ describe('ListingsService', () => {
       findMany: jest.fn(),
       findUnique: jest.fn(),
       create: jest.fn(),
+      delete: jest.fn(),
       count: jest.fn(),
     },
   };
@@ -122,6 +123,32 @@ describe('ListingsService', () => {
 
       expect(prismaService.listing.create).toHaveBeenCalledWith({ data: dto });
       expect(result).toEqual(created);
+    });
+  });
+
+  describe('remove', () => {
+    it('removes a listing by id', async () => {
+      const listingId = '123e4567-e89b-12d3-a456-426614174000';
+      const mockListing = {
+        id: listingId,
+        title: 'Sofa',
+        description: 'Comfy sofa',
+        price: 19999,
+        createdAt: new Date(),
+      };
+      prismaService.listing.delete.mockResolvedValue(mockListing);
+
+      const result = await service.remove(listingId);
+
+      expect(prismaService.listing.delete).toHaveBeenCalledWith({ where: { id: listingId } });
+      expect(result).toEqual(mockListing);
+    });
+
+    it('throws NotFoundException when listing is not found', async () => {
+      const listingId = '123e4567-e89b-12d3-a456-426614174000';
+      prismaService.listing.delete.mockRejectedValue({ code: 'P2025' });
+
+      await expect(service.remove(listingId)).rejects.toThrow();
     });
   });
 });

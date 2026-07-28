@@ -30,6 +30,10 @@ export class ListingsService {
     };
   }
 
+  findOne(id: string) {
+    return this.prisma.listing.findUnique({ where: { id } });
+  }
+
   create(dto: CreateListingDto) {
     return this.prisma.listing.create({ data: dto });
   }

@@ -9,6 +9,7 @@ describe('ListingsService', () => {
   const prismaService = {
     listing: {
       findMany: jest.fn(),
+      findUnique: jest.fn(),
       create: jest.fn(),
       count: jest.fn(),
     },
@@ -75,6 +76,35 @@ describe('ListingsService', () => {
       const result = await service.findAll({ page: 1, limit: 10 });
 
       expect(result).toEqual({ data: [], total: 0, page: 1, limit: 10, totalPages: 0 });
+    });
+  });
+
+  describe('findOne', () => {
+    it('returns a listing when found', async () => {
+      const listingId = '123e4567-e89b-12d3-a456-426614174000';
+      const mockListing = {
+        id: listingId,
+        title: 'Sofa',
+        description: 'Comfy sofa',
+        price: 19999,
+        createdAt: new Date(),
+      };
+      prismaService.listing.findUnique.mockResolvedValue(mockListing);
+
+      const result = await service.findOne(listingId);
+
+      expect(prismaService.listing.findUnique).toHaveBeenCalledWith({ where: { id: listingId } });
+      expect(result).toEqual(mockListing);
+    });
+
+    it('returns null when listing is not found', async () => {
+      const listingId = '123e4567-e89b-12d3-a456-426614174000';
+      prismaService.listing.findUnique.mockResolvedValue(null);
+
+      const result = await service.findOne(listingId);
+
+      expect(prismaService.listing.findUnique).toHaveBeenCalledWith({ where: { id: listingId } });
+      expect(result).toBeNull();
     });
   });
 

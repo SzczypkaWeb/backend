@@ -10,6 +10,7 @@ describe('ListingsService', () => {
     listing: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      update: jest.fn(),
       create: jest.fn(),
       delete: jest.fn(),
       count: jest.fn(),
@@ -38,6 +39,7 @@ describe('ListingsService', () => {
           description: 'Comfy sofa',
           price: 19999,
           location: '',
+          viewCount: 0,
           createdAt: new Date(),
         },
       ];
@@ -62,6 +64,7 @@ describe('ListingsService', () => {
           description: 'Wooden chair',
           price: 4999,
           location: 'Krakow',
+          viewCount: 0,
           createdAt: new Date(),
         },
       ];
@@ -95,6 +98,7 @@ describe('ListingsService', () => {
           description: 'Comfy sofa',
           price: 19999,
           location: 'Warsaw',
+          viewCount: 0,
           createdAt: new Date(),
         },
       ];
@@ -133,6 +137,7 @@ describe('ListingsService', () => {
           description: 'Comfy sofa',
           price: 19999,
           location: 'Warsaw',
+          viewCount: 0,
           createdAt: new Date(),
         },
       ];
@@ -171,6 +176,7 @@ describe('ListingsService', () => {
           description: 'Comfy sofa',
           price: 19999,
           location: 'Warsaw',
+          viewCount: 0,
           createdAt: new Date(),
         },
       ];
@@ -233,7 +239,7 @@ describe('ListingsService', () => {
   });
 
   describe('findOne', () => {
-    it('returns a listing when found', async () => {
+    it('atomically increments viewCount when a listing is found and returns the updated listing', async () => {
       const listingId = '123e4567-e89b-12d3-a456-426614174000';
       const mockListing = {
         id: listingId,
@@ -241,24 +247,90 @@ describe('ListingsService', () => {
         description: 'Comfy sofa',
         price: 19999,
         location: 'Warsaw',
+        viewCount: 1,
         createdAt: new Date(),
       };
-      prismaService.listing.findUnique.mockResolvedValue(mockListing);
+      prismaService.listing.update.mockResolvedValue(mockListing);
 
       const result = await service.findOne(listingId);
 
-      expect(prismaService.listing.findUnique).toHaveBeenCalledWith({ where: { id: listingId } });
+      expect(prismaService.listing.update).toHaveBeenCalledWith({
+        where: { id: listingId },
+        data: { viewCount: { increment: 1 } },
+      });
       expect(result).toEqual(mockListing);
+      expect(result.viewCount).toBe(1);
+    });
+
+    it('returns the updated listing with incremented viewCount on each call', async () => {
+      const listingId = '123e4567-e89b-12d3-a456-426614174000';
+      const firstCall = {
+        id: listingId,
+        title: 'Sofa',
+        description: 'Comfy sofa',
+        price: 19999,
+        location: 'Warsaw',
+        viewCount: 1,
+        createdAt: new Date(),
+      };
+      const secondCall = {
+        id: listingId,
+        title: 'Sofa',
+        description: 'Comfy sofa',
+        price: 19999,
+        location: 'Warsaw',
+        viewCount: 2,
+        createdAt: new Date(),
+      };
+      prismaService.listing.update.mockResolvedValueOnce(firstCall);
+      prismaService.listing.update.mockResolvedValueOnce(secondCall);
+
+      const result1 = await service.findOne(listingId);
+      const result2 = await service.findOne(listingId);
+
+      expect(result1.viewCount).toBe(1);
+      expect(result2.viewCount).toBe(2);
+      expect(prismaService.listing.update).toHaveBeenCalledTimes(2);
+    });
+
+    it('includes viewCount in the response body', async () => {
+      const listingId = '123e4567-e89b-12d3-a456-426614174000';
+      const mockListing = {
+        id: listingId,
+        title: 'Sofa',
+        description: 'Comfy sofa',
+        price: 19999,
+        location: 'Warsaw',
+        viewCount: 5,
+        createdAt: new Date(),
+      };
+      prismaService.listing.update.mockResolvedValue(mockListing);
+
+      const result = await service.findOne(listingId);
+
+      expect(result).toHaveProperty('viewCount');
+      expect(result.viewCount).toBe(5);
     });
 
     it('returns null when listing is not found', async () => {
       const listingId = '123e4567-e89b-12d3-a456-426614174000';
-      prismaService.listing.findUnique.mockResolvedValue(null);
+      prismaService.listing.update.mockRejectedValue({ code: 'P2025' });
 
       const result = await service.findOne(listingId);
 
-      expect(prismaService.listing.findUnique).toHaveBeenCalledWith({ where: { id: listingId } });
       expect(result).toBeNull();
+    });
+
+    it('does not affect viewCount of other listings when a listing is not found', async () => {
+      const nonExistentId = 'nonexistent-id';
+      prismaService.listing.update.mockRejectedValue({ code: 'P2025' });
+
+      await service.findOne(nonExistentId);
+
+      expect(prismaService.listing.update).toHaveBeenCalledWith({
+        where: { id: nonExistentId },
+        data: { viewCount: { increment: 1 } },
+      });
     });
   });
 
@@ -269,7 +341,7 @@ describe('ListingsService', () => {
         description: 'Comfy sofa',
         price: 19999,
       };
-      const created = { id: '1', ...dto, location: '', createdAt: new Date() };
+      const created = { id: '1', ...dto, location: '', viewCount: 0, createdAt: new Date() };
       prismaService.listing.create.mockResolvedValue(created);
 
       const result = await service.create(dto);
@@ -288,6 +360,7 @@ describe('ListingsService', () => {
         description: 'Comfy sofa',
         price: 19999,
         location: 'Warsaw',
+        viewCount: 0,
         createdAt: new Date(),
       };
       prismaService.listing.delete.mockResolvedValue(mockListing);

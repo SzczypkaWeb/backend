@@ -49,6 +49,7 @@ describe('ListingsController', () => {
         description: 'Comfy sofa',
         price: 19999,
         location: 'Warsaw',
+        viewCount: 0,
         createdAt: new Date(),
       };
       const paginated = { data: [listing], total: 1, page: 1, limit: 10, totalPages: 1 };
@@ -68,10 +69,11 @@ describe('ListingsController', () => {
       description: 'Comfy sofa',
       price: 19999,
       location: 'Warsaw',
+      viewCount: 1,
       createdAt: new Date(),
     };
 
-    it('returns a listing when found', async () => {
+    it('returns a listing with viewCount when found', async () => {
       listingsService.findOne.mockResolvedValue(mockListing);
 
       const result = await controller.findOne(listingId);
@@ -79,12 +81,35 @@ describe('ListingsController', () => {
       expect(listingsService.findOne).toHaveBeenCalledWith(listingId);
       expect(listingsService.findOne).toHaveBeenCalledTimes(1);
       expect(result).toEqual(mockListing);
+      expect(result.viewCount).toBe(1);
+    });
+
+    it('includes viewCount in the response body', async () => {
+      listingsService.findOne.mockResolvedValue(mockListing);
+
+      const result = await controller.findOne(listingId);
+
+      expect(result).toHaveProperty('viewCount');
+      expect(result.viewCount).toBe(1);
     });
 
     it('throws NotFoundException when listing is not found', async () => {
       listingsService.findOne.mockResolvedValue(null);
 
       await expect(controller.findOne(listingId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('increments viewCount on each successive call to findOne', async () => {
+      const listing1 = { ...mockListing, viewCount: 1 };
+      const listing2 = { ...mockListing, viewCount: 2 };
+      listingsService.findOne.mockResolvedValueOnce(listing1);
+      listingsService.findOne.mockResolvedValueOnce(listing2);
+
+      const result1 = await controller.findOne(listingId);
+      const result2 = await controller.findOne(listingId);
+
+      expect(result1.viewCount).toBe(1);
+      expect(result2.viewCount).toBe(2);
     });
   });
 
@@ -95,7 +120,7 @@ describe('ListingsController', () => {
         description: 'Comfy sofa',
         price: 19999,
       };
-      const created = { id: '1', ...dto, location: '', createdAt: new Date() };
+      const created = { id: '1', ...dto, location: '', viewCount: 0, createdAt: new Date() };
       listingsService.create.mockResolvedValue(created);
 
       const result = await controller.create(dto);

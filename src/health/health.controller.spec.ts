@@ -19,8 +19,6 @@ describe('HealthController', () => {
   });
 
   it('returns ok status', () => {
-    expect(controller.check()).toEqual(
-      expect.objectContaining({ status: 'ok' }),
-    );
+    expect(controller.check()).toEqual(expect.objectContaining({ status: 'ok' }));
   });
 });

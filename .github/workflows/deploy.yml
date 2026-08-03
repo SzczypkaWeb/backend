@@ -19,6 +19,13 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # generated/ (the Prisma Client output) is gitignored and must be
+      # (re)built from prisma/schema.prisma before lint/test, otherwise
+      # generated types drift out of sync with the schema (see the
+      # `generated Prisma client / schema.prisma sync` spec in
+      # src/listings) and `../../generated/prisma/client` fails to resolve
+      # on a clean checkout.
+      - run: pnpm exec prisma generate
       - run: pnpm lint
       - run: pnpm test
 

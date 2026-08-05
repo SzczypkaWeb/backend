@@ -31,6 +31,21 @@ describe('validateEnv', () => {
     expect(() => validateEnv(config)).toThrow(/Invalid environment configuration/);
   });
 
+  // Both are redirect/callback targets driven by env config: GOOGLE_CALLBACK_URL
+  // is registered with Google and FRONTEND_ORIGIN is where the OAuth callback
+  // redirects the browser after login. A malformed value here that still
+  // passes the non-empty check (e.g. "not-a-url", or a bare host used to
+  // smuggle an open redirect) should fail fast at startup rather than at
+  // request time.
+  it.each(['GOOGLE_CALLBACK_URL', 'FRONTEND_ORIGIN'])(
+    'throws a clear error when %s is not a well-formed URL',
+    (key) => {
+      const config = { ...requiredEnv, [key]: 'not-a-url' };
+
+      expect(() => validateEnv(config)).toThrow(/Invalid environment configuration/);
+    },
+  );
+
   it('reports all missing variables in a single error', () => {
     try {
       validateEnv({});

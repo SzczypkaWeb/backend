@@ -11,6 +11,11 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      GOOGLE_CLIENT_ID: test-client-id
+      GOOGLE_CLIENT_SECRET: test-client-secret
+      GOOGLE_CALLBACK_URL: http://localhost:3000/auth/google/callback
+      FRONTEND_ORIGIN: http://localhost:8080
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

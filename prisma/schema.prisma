@@ -4,8 +4,8 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client-js"
-  output   = "../generated/prisma"
+  provider      = "prisma-client-js"
+  output        = "../generated/prisma"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
@@ -22,6 +22,31 @@ model User {
   googleId     String?  @unique
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  // How the account was created. This is additive metadata alongside the
+  // existing nullable `googleId` field (which already tells you whether an
+  // account is linked to Google) rather than a replacement for it - the
+  // account-linking logic in AuthService keeps using `googleId`.
+  authProvider    AuthProvider @default(email)
+  emailVerifiedAt DateTime?
+  phone           String?
+  phoneVerifiedAt DateTime?
+  status          UserStatus   @default(pending_verification)
+
+  providerProfile ProviderProfile?
+  clientProfile   ClientProfile?
+  phoneOtps       PhoneOtp[]
+}
+
+enum AuthProvider {
+  email
+  google
+}
+
+enum UserStatus {
+  pending_verification
+  active
+  banned
 }
 
 model Listing {
@@ -33,4 +58,177 @@ model Listing {
   location    String   @default("")
   viewCount   Int      @default(0)
   createdAt   DateTime @default(now())
+}
+
+// --- Service marketplace domain -------------------------------------------
+//
+// Providers offer services under one or more categories; clients post
+// service requests (either asking for a quote, or with a fixed budget
+// range) and providers respond with quotes.
+//
+// Geolocation (baseLat/baseLng/lat/lng) is stored as plain floats for now.
+// PostGIS/GiST proximity indexing is deliberately deferred to a later task
+// once real radius search is being built.
+
+model ServiceCategory {
+  id       String  @id @default(uuid())
+  name     String
+  slug     String  @unique
+  parentId String?
+
+  parent   ServiceCategory?  @relation("ServiceCategoryHierarchy", fields: [parentId], references: [id])
+  children ServiceCategory[] @relation("ServiceCategoryHierarchy")
+
+  providerCategories ProviderCategory[]
+  serviceRequests    ServiceRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentId])
+}
+
+enum VerificationStatus {
+  pending
+  verified
+  rejected
+}
+
+model ProviderProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  nip            String
+  companyName    String
+  companyAddress String
+
+  verificationStatus VerificationStatus @default(pending)
+
+  // Plain lat/lng floats - see module note above re: deferred PostGIS.
+  baseLat         Float
+  baseLng         Float
+  baseAddress     String
+  serviceRadiusKm Int
+
+  bio String?
+
+  categories ProviderCategory[]
+  quotes     Quote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProviderCategory {
+  providerId String
+  categoryId String
+
+  provider ProviderProfile @relation(fields: [providerId], references: [id])
+  category ServiceCategory @relation(fields: [categoryId], references: [id])
+
+  @@id([providerId, categoryId])
+  @@index([categoryId])
+}
+
+model ClientProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  serviceRequests ServiceRequest[]
+
+  createdAt DateTime @default(now())
+}
+
+enum ServiceRequestStatus {
+  open
+  matched
+  closed
+}
+
+model ServiceRequest {
+  id String @id @default(uuid())
+
+  clientId String
+  client   ClientProfile @relation(fields: [clientId], references: [id])
+
+  categoryId String
+  category   ServiceCategory @relation(fields: [categoryId], references: [id])
+
+  description String
+  address     String
+
+  // Plain lat/lng floats - see module note above re: deferred PostGIS.
+  lat Float
+  lng Float
+
+  needsQuote Boolean
+
+  // Only meaningful when needsQuote is false; null when the client asked
+  // for a quote instead of naming a budget.
+  budgetMin Decimal? @db.Decimal(10, 2)
+  budgetMax Decimal? @db.Decimal(10, 2)
+
+  desiredDate DateTime? @db.Date
+
+  status ServiceRequestStatus @default(open)
+
+  photos    RequestPhoto[]
+  quotes    Quote[]
+  createdAt DateTime       @default(now())
+
+  @@index([status, categoryId])
+}
+
+model RequestPhoto {
+  id String @id @default(uuid())
+
+  requestId String
+  request   ServiceRequest @relation(fields: [requestId], references: [id])
+
+  url       String
+  sortOrder Int
+
+  @@index([requestId])
+}
+
+enum QuoteStatus {
+  pending
+  accepted
+  rejected
+}
+
+model Quote {
+  id String @id @default(uuid())
+
+  requestId String
+  request   ServiceRequest @relation(fields: [requestId], references: [id])
+
+  providerId String
+  provider   ProviderProfile @relation(fields: [providerId], references: [id])
+
+  price   Decimal @db.Decimal(10, 2)
+  message String?
+
+  status QuoteStatus @default(pending)
+
+  createdAt DateTime @default(now())
+
+  @@index([requestId])
+  @@index([providerId])
+}
+
+model PhoneOtp {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  code      String
+  expiresAt DateTime
+
+  verifiedAt DateTime?
+
+  @@index([userId])
 }

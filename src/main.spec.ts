@@ -20,6 +20,7 @@ describe('bootstrap', () => {
     get: jest.fn(),
     useGlobalPipes: jest.fn(),
     enableCors: jest.fn(),
+    use: jest.fn(),
     listen: jest.fn().mockResolvedValue(undefined),
   };
 
@@ -27,21 +28,25 @@ describe('bootstrap', () => {
     jest.clearAllMocks();
     appMock.listen.mockResolvedValue(undefined);
     (NestFactory.create as jest.Mock).mockResolvedValue(appMock);
+    appMock.get.mockReturnValue(createConfigServiceStub({ PORT: 3000 }));
   });
 
-  it('enables CORS for the configured CORS_ORIGIN env var', async () => {
-    appMock.get.mockReturnValue(createConfigServiceStub({ CORS_ORIGIN: 'https://example.com' }));
-
-    await bootstrap();
-
-    expect(appMock.enableCors).toHaveBeenCalledWith({ origin: 'https://example.com' });
+  afterEach(() => {
+    delete process.env.FRONTEND_ORIGIN;
   });
 
-  it('falls back to the localhost dev origin when CORS_ORIGIN is not set', async () => {
-    appMock.get.mockReturnValue(createConfigServiceStub({}));
-
+  it('enables CORS for the configured FRONTEND_ORIGIN env var, with credentials', async () => {
+    process.env.FRONTEND_ORIGIN = 'https://example.com';
     await bootstrap();
+    expect(appMock.enableCors).toHaveBeenCalledWith({
+      origin: 'https://example.com',
+      credentials: true,
+    });
+  });
 
-    expect(appMock.enableCors).toHaveBeenCalledWith({ origin: 'http://localhost:8080' });
+  it('applies cookie-parser middleware', async () => {
+    process.env.FRONTEND_ORIGIN = 'https://example.com';
+    await bootstrap();
+    expect(appMock.use).toHaveBeenCalled();
   });
 });

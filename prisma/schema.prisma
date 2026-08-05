@@ -13,18 +13,20 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  createdAt DateTime @default(now())
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Listing {
-  id        String   @id @default(uuid())
-  title     String
+  id          String   @id @default(uuid())
+  title       String
   description String
   // Price stored in cents (integer) to avoid floating-point rounding issues.
-  price     Int
-  location  String   @default("")
-  viewCount Int      @default(0)
-  createdAt DateTime @default(now())
+  price       Int
+  location    String   @default("")
+  viewCount   Int      @default(0)
+  createdAt   DateTime @default(now())
 }

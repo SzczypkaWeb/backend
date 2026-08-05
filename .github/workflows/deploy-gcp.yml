@@ -1,0 +1,64 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+      - run: pnpm lint
+      - run: pnpm test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/416578348143/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-actions-backend-deploy@szczypka-web-backend.iam.gserviceaccount.com'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker europe-central2-docker.pkg.dev
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image (amd64 — wymagane przez Cloud Run)
+        env:
+          IMAGE: europe-central2-docker.pkg.dev/szczypka-web-backend/backend/api
+        run: |
+          docker buildx build --platform linux/amd64 \
+            -t $IMAGE:${{ github.sha }} \
+            -t $IMAGE:latest \
+            --push .
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy backend \
+            --image=europe-central2-docker.pkg.dev/szczypka-web-backend/backend/api:${{ github.sha }} \
+            --region=europe-central2 \
+            --allow-unauthenticated \
+            --port=3000 \
+            --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL }}"

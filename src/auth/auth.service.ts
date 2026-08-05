@@ -2,22 +2,58 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { UsersService } from '../users/users.service';
+import { PrismaService } from '../prisma/prisma.service';
+
+interface GoogleProfile {
+  email: string;
+  googleId: string;
+}
 
 @Injectable()
 export class AuthService {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    private prisma: PrismaService,
   ) {}
 
   async validateUser(email: string, password: string) {
     const user = await this.usersService.findByEmail(email);
     if (!user) throw new UnauthorizedException('Invalid credentials');
 
+    // Google-only accounts have no passwordHash, so email/password login
+    // must be rejected rather than passed to argon2 (which requires a
+    // non-empty hash string).
+    if (!user.passwordHash) throw new UnauthorizedException('Invalid credentials');
+
     const passwordValid = await argon2.verify(user.passwordHash, password);
     if (!passwordValid) throw new UnauthorizedException('Invalid credentials');
 
     return user;
+  }
+
+  // Account-linking logic used by GoogleStrategy#validate: finds a user by
+  // the email address returned by Google, links the Google account to it if
+  // it isn't linked yet, or creates a brand new (password-less) user.
+  async validateGoogleUser({ email, googleId }: GoogleProfile) {
+    const existingUser = await this.usersService.findByEmail(email);
+
+    if (existingUser) {
+      if (existingUser.googleId) return existingUser;
+
+      return this.prisma.user.update({
+        where: { id: existingUser.id },
+        data: { googleId },
+      });
+    }
+
+    return this.prisma.user.create({
+      data: {
+        email,
+        googleId,
+        passwordHash: null,
+      },
+    });
   }
 
   async issueAccessToken(userId: string, email: string) {

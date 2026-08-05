@@ -4,21 +4,25 @@ import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 describe('AuthService', () => {
   let authService: AuthService;
   let usersService: { findByEmail: jest.Mock; findOne: jest.Mock };
   let jwtService: { signAsync: jest.Mock };
+  let prismaService: { user: { update: jest.Mock; create: jest.Mock } };
 
   beforeEach(async () => {
     usersService = { findByEmail: jest.fn(), findOne: jest.fn() };
     jwtService = { signAsync: jest.fn().mockResolvedValue('signed.jwt.token') };
+    prismaService = { user: { update: jest.fn(), create: jest.fn() } };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: UsersService, useValue: usersService },
         { provide: JwtService, useValue: jwtService },
+        { provide: PrismaService, useValue: prismaService },
       ],
     }).compile();
 
@@ -49,6 +53,91 @@ describe('AuthService', () => {
 
       const result = await authService.validateUser('a@test.com', 'correct-password');
       expect(result).toEqual(user);
+    });
+
+    it('throws UnauthorizedException for a Google-only account (no passwordHash)', async () => {
+      usersService.findByEmail.mockResolvedValue({
+        id: '1',
+        email: 'google@test.com',
+        passwordHash: null,
+        googleId: 'google-sub-123',
+      });
+
+      await expect(authService.validateUser('google@test.com', 'whatever')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+  });
+
+  describe('validateGoogleUser', () => {
+    it('links the Google account to an existing user found by email that has no googleId yet', async () => {
+      const existingUser = {
+        id: '1',
+        email: 'a@test.com',
+        passwordHash: 'hash',
+        googleId: null,
+      };
+      const linkedUser = { ...existingUser, googleId: 'google-sub-123' };
+      usersService.findByEmail.mockResolvedValue(existingUser);
+      prismaService.user.update.mockResolvedValue(linkedUser);
+
+      const result = await authService.validateGoogleUser({
+        email: 'a@test.com',
+        googleId: 'google-sub-123',
+      });
+
+      expect(usersService.findByEmail).toHaveBeenCalledWith('a@test.com');
+      expect(prismaService.user.update).toHaveBeenCalledWith({
+        where: { id: '1' },
+        data: { googleId: 'google-sub-123' },
+      });
+      expect(prismaService.user.create).not.toHaveBeenCalled();
+      expect(result).toEqual(linkedUser);
+    });
+
+    it('returns the existing user as-is when the googleId is already linked (idempotent)', async () => {
+      const existingUser = {
+        id: '1',
+        email: 'a@test.com',
+        passwordHash: null,
+        googleId: 'google-sub-123',
+      };
+      usersService.findByEmail.mockResolvedValue(existingUser);
+
+      const result = await authService.validateGoogleUser({
+        email: 'a@test.com',
+        googleId: 'google-sub-123',
+      });
+
+      expect(prismaService.user.update).not.toHaveBeenCalled();
+      expect(prismaService.user.create).not.toHaveBeenCalled();
+      expect(result).toEqual(existingUser);
+    });
+
+    it('creates a new user with no passwordHash when no account exists for that email', async () => {
+      usersService.findByEmail.mockResolvedValue(null);
+      const createdUser = {
+        id: '2',
+        email: 'new@test.com',
+        passwordHash: null,
+        googleId: 'google-sub-456',
+      };
+      prismaService.user.create.mockResolvedValue(createdUser);
+
+      const result = await authService.validateGoogleUser({
+        email: 'new@test.com',
+        googleId: 'google-sub-456',
+      });
+
+      expect(prismaService.user.create).toHaveBeenCalledWith({
+        data: {
+          email: 'new@test.com',
+          googleId: 'google-sub-456',
+          passwordHash: null,
+        },
+      });
+      expect(prismaService.user.update).not.toHaveBeenCalled();
+      expect(result).toEqual(createdUser);
     });
   });
 

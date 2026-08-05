@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import * as argon2 from 'argon2';
 
 @Injectable()
 export class UsersService {
@@ -51,8 +52,18 @@ export class UsersService {
     return user;
   }
 
-  create(dto: CreateUserDto) {
-    return this.prisma.user.create({ data: dto });
+  async findByEmail(email: string) {
+    return this.prisma.user.findUnique({ where: { email } });
+  }
+
+  async create(dto: CreateUserDto) {
+    const passwordHash = await argon2.hash(dto.password);
+    return this.prisma.user.create({
+      data: {
+        email: dto.email,
+        passwordHash,
+      },
+    });
   }
 
   async update(id: string, dto: UpdateUserDto) {

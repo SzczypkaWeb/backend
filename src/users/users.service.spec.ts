@@ -5,6 +5,13 @@ import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 
+jest.mock('argon2', () => ({
+  hash: jest.fn().mockResolvedValue('$argon2id$v=19$m=65536,t=3,p=4$mocked$hash'),
+}));
+
+// Import the mocked argon2 for use in tests
+const argon2 = jest.requireMock<{ hash: jest.Mock }>('argon2');
+
 describe('UsersService', () => {
   let service: UsersService;
   const prismaService = {
@@ -146,6 +153,64 @@ describe('UsersService', () => {
       expect(prismaService.user.findUnique).toHaveBeenCalledWith({
         where: { id },
       });
+    });
+  });
+
+  describe('create', () => {
+    it('hashes the password and creates a user with the hashed password', async () => {
+      const dto = { email: 'new@example.com', password: 'plain-password' };
+      const mockHash = '$argon2id$v=19$m=65536,t=3,p=4$mocked$hash';
+      const createdUser = {
+        id: 'user-new',
+        email: dto.email,
+        passwordHash: mockHash,
+        createdAt: new Date(),
+      };
+
+      argon2.hash.mockResolvedValue(mockHash);
+      prismaService.user.create.mockResolvedValue(createdUser);
+
+      const result = await service.create(dto);
+
+      expect(argon2.hash).toHaveBeenCalledWith(dto.password);
+      expect(prismaService.user.create).toHaveBeenCalledWith({
+        data: { email: dto.email, passwordHash: mockHash },
+      });
+      expect(result).toEqual(createdUser);
+    });
+  });
+
+  describe('findByEmail', () => {
+    it('returns the user when found by email', async () => {
+      const email = 'test@example.com';
+      const user = { id: 'user-123', email, passwordHash: 'hash' };
+      prismaService.user.findUnique.mockResolvedValue(user);
+
+      const result = await service.findByEmail(email);
+
+      expect(prismaService.user.findUnique).toHaveBeenCalledWith({ where: { email } });
+      expect(result).toEqual(user);
+    });
+
+    it('returns null when user is not found by email', async () => {
+      prismaService.user.findUnique.mockResolvedValue(null);
+
+      const result = await service.findByEmail('notfound@example.com');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('remove', () => {
+    it('deletes a user by id', async () => {
+      const id = 'user-123';
+      const deletedUser = { id, email: 'test@example.com' };
+      prismaService.user.delete.mockResolvedValue(deletedUser);
+
+      const result = await service.remove(id);
+
+      expect(prismaService.user.delete).toHaveBeenCalledWith({ where: { id } });
+      expect(result).toEqual(deletedUser);
     });
   });
 

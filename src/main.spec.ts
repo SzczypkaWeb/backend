@@ -4,6 +4,11 @@ jest.mock('@nestjs/core', () => ({
   },
 }));
 
+jest.mock('argon2', () => ({
+  hash: jest.fn().mockResolvedValue('$argon2id$v=19$m=65536,t=3,p=4$mocked$hash'),
+  verify: jest.fn().mockResolvedValue(true),
+}));
+
 import { NestFactory } from '@nestjs/core';
 import { bootstrap } from './main';
 

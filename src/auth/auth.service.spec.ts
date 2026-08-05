@@ -1,10 +1,16 @@
 import { Test } from '@nestjs/testing';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as argon2 from 'argon2';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
+
+jest.mock('argon2', () => ({
+  verify: jest.fn().mockResolvedValue(true),
+}));
+
+// Import the mocked argon2 for use in tests
+const argon2 = jest.requireMock<{ verify: jest.Mock }>('argon2');
 
 describe('AuthService', () => {
   let authService: AuthService;
@@ -30,6 +36,11 @@ describe('AuthService', () => {
   });
 
   describe('validateUser', () => {
+    beforeEach(() => {
+      // Mock argon2.verify to return true by default (password matches)
+      argon2.verify.mockResolvedValue(true);
+    });
+
     it('throws UnauthorizedException when user does not exist', async () => {
       usersService.findByEmail.mockResolvedValue(null);
       await expect(authService.validateUser('nope@test.com', 'whatever')).rejects.toThrow(
@@ -38,21 +49,25 @@ describe('AuthService', () => {
     });
 
     it('throws UnauthorizedException when password is wrong', async () => {
-      const passwordHash = await argon2.hash('correct-password');
+      const passwordHash = '$argon2id$v=19$m=65536,t=3,p=4$mocked$hash';
       usersService.findByEmail.mockResolvedValue({ id: '1', email: 'a@test.com', passwordHash });
+      argon2.verify.mockResolvedValue(false);
 
       await expect(authService.validateUser('a@test.com', 'wrong-password')).rejects.toThrow(
         UnauthorizedException,
       );
+      expect(argon2.verify).toHaveBeenCalledWith(passwordHash, 'wrong-password');
     });
 
     it('returns the user when credentials are correct', async () => {
-      const passwordHash = await argon2.hash('correct-password');
+      const passwordHash = '$argon2id$v=19$m=65536,t=3,p=4$mocked$hash';
       const user = { id: '1', email: 'a@test.com', passwordHash };
       usersService.findByEmail.mockResolvedValue(user);
+      argon2.verify.mockResolvedValue(true);
 
       const result = await authService.validateUser('a@test.com', 'correct-password');
       expect(result).toEqual(user);
+      expect(argon2.verify).toHaveBeenCalledWith(passwordHash, 'correct-password');
     });
 
     it('throws UnauthorizedException for a Google-only account (no passwordHash)', async () => {

@@ -10,6 +10,10 @@ import { AuthService } from './auth.service';
 import { GoogleAuthGuard } from './google-auth/google-auth.guard';
 import { GoogleStrategy } from './google.strategy';
 
+jest.mock('argon2', () => ({
+  verify: jest.fn().mockResolvedValue(true),
+}));
+
 describe('AuthController - Google OAuth', () => {
   const authService = {
     validateUser: jest.fn(),

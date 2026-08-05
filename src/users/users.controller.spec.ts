@@ -5,6 +5,10 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 
+jest.mock('argon2', () => ({
+  hash: jest.fn().mockResolvedValue('$argon2id$v=19$m=65536,t=3,p=4$mocked$hash'),
+}));
+
 describe('UsersController', () => {
   let controller: UsersController;
   const usersService = {

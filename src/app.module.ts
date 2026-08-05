@@ -8,10 +8,11 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ListingsModule } from './listings/listings.module';
 import { AuthController } from './auth/auth.controller';
 import { AuthModule } from './auth/auth.module';
+import { validateEnv } from './config/env.validation';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     HealthModule,
     UsersModule,
     PrismaModule,

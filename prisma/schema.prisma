@@ -15,7 +15,10 @@ datasource db {
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
-  passwordHash String
+  // Nullable: Google-only users (no email/password signup) have no password.
+  passwordHash String?
+  // Google account subject id, set for users who signed up/linked via Google OAuth.
+  googleId     String?  @unique
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

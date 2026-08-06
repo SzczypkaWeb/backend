@@ -1,9 +1,12 @@
-import { NotFoundException } from '@nestjs/common';
+import { INestApplication, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import request from 'supertest';
+import type { App } from 'supertest/types';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 jest.mock('argon2', () => ({
   hash: jest.fn().mockResolvedValue('$argon2id$v=19$m=65536,t=3,p=4$mocked$hash'),
@@ -118,5 +121,74 @@ describe('UsersController', () => {
       expect(usersService.remove).toHaveBeenCalledWith(id);
       expect(usersService.remove).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// SECURITY: exercises the real HTTP layer (real UsersController + real
+// UsersService, only Prisma is mocked) end to end, the same way a real
+// GET /users request was found to leak the raw argon2 passwordHash.
+// Mocking UsersService instead - like the suite above - would hide this
+// class of bug, since it bypasses the exact code that's responsible for
+// shaping the response.
+describe('UsersController (HTTP) - sensitive field exclusion', () => {
+  let app: INestApplication<App>;
+  const prismaService = {
+    user: {
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      count: jest.fn(),
+    },
+  };
+
+  const rawUserFromDb = {
+    id: 'user-1',
+    email: 'leaky@example.com',
+    passwordHash: '$argon2id$v=19$m=65536,t=3,p=4$real$hash',
+    googleId: null,
+    authProvider: 'email',
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  };
+
+  beforeAll(async () => {
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      controllers: [UsersController],
+      providers: [UsersService, { provide: PrismaService, useValue: prismaService }],
+    }).compile();
+
+    app = moduleRef.createNestApplication();
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('GET /users never serializes passwordHash, even though Prisma returns it', async () => {
+    prismaService.user.findMany.mockResolvedValue([rawUserFromDb]);
+    prismaService.user.count.mockResolvedValue(1);
+
+    const res = await request(app.getHttpServer()).get('/users');
+    const body = res.body as { data: Record<string, unknown>[] };
+
+    expect(res.status).toBe(200);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).not.toHaveProperty('passwordHash');
+    // Sanity check: the fix isn't just dropping the whole user.
+    expect(body.data[0]).toMatchObject({ id: 'user-1', email: 'leaky@example.com' });
+  });
+
+  it('GET /users/:id never serializes passwordHash, even though Prisma returns it', async () => {
+    prismaService.user.findUnique.mockResolvedValue(rawUserFromDb);
+
+    const res = await request(app.getHttpServer()).get('/users/user-1');
+
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('passwordHash');
+    expect(res.body).toMatchObject({ id: 'user-1', email: 'leaky@example.com' });
   });
 });

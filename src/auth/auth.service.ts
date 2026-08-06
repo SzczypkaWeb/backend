@@ -73,6 +73,11 @@ export class AuthService {
         email,
         googleId,
         passwordHash: null,
+        // Explicit rather than relying on the schema's column default
+        // ('email'): a brand-new Google-authenticated user must never end
+        // up mislabeled as an email/password signup. See UsersService.create
+        // for the equivalent explicit set on the email/password path.
+        authProvider: 'google',
       },
     });
   }

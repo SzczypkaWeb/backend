@@ -3,12 +3,19 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CanActivate, ExecutionContext, INestApplication } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { ConfigService } from '@nestjs/config';
+import { JwtModule, JwtService } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
+import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { GoogleAuthGuard } from './google-auth/google-auth.guard';
 import { GoogleStrategy } from './google.strategy';
+import { JwtAuthGuard } from './jwt-auth/jwt-auth.guard';
+import { JwtStrategy } from './jwt.strategy';
+import { UsersService } from '../users/users.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 jest.mock('argon2', () => ({
   verify: jest.fn().mockResolvedValue(true),
@@ -208,5 +215,84 @@ describe('AuthController - Google OAuth', () => {
       expect(cookies[0]).toContain('SameSite=None');
       expect(cookies[0]).toContain('Secure');
     });
+  });
+});
+
+// SECURITY: real GET /auth/me flow (real AuthController + real AuthService +
+// real JwtAuthGuard/JwtStrategy, driven by an actual signed JWT cookie).
+// Only UsersService is mocked, and it deliberately returns a raw
+// Prisma-shaped user with a passwordHash, mirroring what the DB actually
+// returns - the same shape that caused the GET /users leak.
+describe('AuthController - GET /auth/me', () => {
+  let app: INestApplication<App>;
+  let jwtService: JwtService;
+  const usersService = { findOne: jest.fn() };
+
+  const rawUserFromDb = {
+    id: 'user-1',
+    email: 'me@example.com',
+    passwordHash: '$argon2id$v=19$m=65536,t=3,p=4$real$hash',
+    googleId: null,
+    authProvider: 'email',
+  };
+
+  beforeAll(async () => {
+    process.env.JWT_ACCESS_SECRET = 'test-access-secret';
+
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      controllers: [AuthController],
+      imports: [PassportModule, JwtModule.register({})],
+      providers: [
+        AuthService,
+        { provide: UsersService, useValue: usersService },
+        { provide: PrismaService, useValue: {} },
+        { provide: ConfigService, useValue: {} },
+        JwtStrategy,
+      ],
+    }).compile();
+
+    app = moduleRef.createNestApplication();
+    app.use(cookieParser());
+    await app.init();
+    jwtService = moduleRef.get(JwtService);
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('never serializes passwordHash, even though the DB/UsersService returns it', async () => {
+    usersService.findOne.mockResolvedValue(rawUserFromDb);
+    const accessToken = await jwtService.signAsync(
+      { sub: rawUserFromDb.id, email: rawUserFromDb.email },
+      { secret: process.env.JWT_ACCESS_SECRET },
+    );
+
+    const res = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Cookie', [`access_token=${accessToken}`]);
+
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('passwordHash');
+    expect(res.body).toEqual({ userId: rawUserFromDb.id, email: rawUserFromDb.email });
+  });
+
+  it('rejects requests without a valid access token cookie', async () => {
+    const res = await request(app.getHttpServer()).get('/auth/me');
+
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('AuthController.me() guard wiring', () => {
+  it('is guarded by JwtAuthGuard', () => {
+    const me = Object.getOwnPropertyDescriptor(AuthController.prototype, 'me')?.value as unknown;
+    const guards = Reflect.getMetadata(GUARDS_METADATA, me) as unknown[];
+
+    expect(guards).toContain(JwtAuthGuard);
   });
 });

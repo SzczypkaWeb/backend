@@ -136,6 +136,7 @@ describe('AuthService', () => {
         email: 'new@test.com',
         passwordHash: null,
         googleId: 'google-sub-456',
+        authProvider: 'google',
       };
       prismaService.user.create.mockResolvedValue(createdUser);
 
@@ -149,10 +150,58 @@ describe('AuthService', () => {
           email: 'new@test.com',
           googleId: 'google-sub-456',
           passwordHash: null,
+          authProvider: 'google',
         },
       });
       expect(prismaService.user.update).not.toHaveBeenCalled();
       expect(result).toEqual(createdUser);
+    });
+
+    // DATA BUG REGRESSION: a brand-new Google signup must never be persisted
+    // with the DB column's default authProvider ('email') - see the bug
+    // report this fixes (a real user had googleId set, passwordHash null,
+    // and authProvider incorrectly 'email').
+    it('sets authProvider to "google" (not the schema default "email") when creating a new Google-authenticated user', async () => {
+      usersService.findByEmail.mockResolvedValue(null);
+      prismaService.user.create.mockResolvedValue({
+        id: '3',
+        email: 'brandnew@test.com',
+        passwordHash: null,
+        googleId: 'google-sub-999',
+        authProvider: 'google',
+      });
+
+      await authService.validateGoogleUser({
+        email: 'brandnew@test.com',
+        googleId: 'google-sub-999',
+      });
+
+      const calls = prismaService.user.create.mock.calls as Array<
+        [{ data: Record<string, unknown> }]
+      >;
+      expect(calls[0][0].data.authProvider).toBe('google');
+    });
+
+    it('does not touch authProvider when merely linking Google to an existing email/password account', async () => {
+      const existingUser = {
+        id: '1',
+        email: 'a@test.com',
+        passwordHash: 'hash',
+        googleId: null,
+        authProvider: 'email',
+      };
+      usersService.findByEmail.mockResolvedValue(existingUser);
+      prismaService.user.update.mockResolvedValue({ ...existingUser, googleId: 'google-sub-123' });
+
+      await authService.validateGoogleUser({
+        email: 'a@test.com',
+        googleId: 'google-sub-123',
+      });
+
+      expect(prismaService.user.update).toHaveBeenCalledWith({
+        where: { id: '1' },
+        data: { googleId: 'google-sub-123' },
+      });
     });
 
     it('rejects malformed profile emails instead of writing them to the DB', async () => {

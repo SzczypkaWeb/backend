@@ -10,6 +10,8 @@ import { ServiceCategoriesModule } from './service-categories/service-categories
 import { AuthController } from './auth/auth.controller';
 import { AuthModule } from './auth/auth.module';
 import { validateEnv } from './config/env.validation';
+import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup';
+import { APP_FILTER } from '@nestjs/core';
 
 @Module({
   imports: [
@@ -20,8 +22,15 @@ import { validateEnv } from './config/env.validation';
     ListingsModule,
     ServiceCategoriesModule,
     AuthModule,
+    SentryModule.forRoot(),
   ],
   controllers: [AppController, AuthController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_FILTER,
+      useClass: SentryGlobalFilter,
+    },
+  ],
 })
 export class AppModule {}

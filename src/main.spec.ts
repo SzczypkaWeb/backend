@@ -1,4 +1,5 @@
 jest.mock('@nestjs/core', () => ({
+  ...jest.requireActual<typeof import('@nestjs/core')>('@nestjs/core'),
   NestFactory: {
     create: jest.fn(),
   },

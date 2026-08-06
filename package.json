@@ -21,7 +21,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prepare": "lefthook install || true",
     "postinstall": "prisma generate",
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node prisma/seed.ts",
+    "backfill:google-auth-provider": "ts-node prisma/backfill-google-auth-provider.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

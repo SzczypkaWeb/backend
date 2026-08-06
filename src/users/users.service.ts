@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { sanitizeUser } from './sanitize-user';
 import * as argon2 from 'argon2';
 
 @Injectable()
@@ -34,7 +35,7 @@ export class UsersService {
     ]);
 
     return {
-      data,
+      data: data.map(sanitizeUser),
       total,
       page,
       limit,
@@ -49,21 +50,29 @@ export class UsersService {
       throw new NotFoundException(`User with id ${id} not found`);
     }
 
-    return user;
+    return sanitizeUser(user);
   }
 
+  // Internal lookup used by AuthService to verify credentials - intentionally
+  // NOT sanitized, since the caller needs the passwordHash. Never return this
+  // result directly to a client.
   async findByEmail(email: string) {
     return this.prisma.user.findUnique({ where: { email } });
   }
 
   async create(dto: CreateUserDto) {
     const passwordHash = await argon2.hash(dto.password);
-    return this.prisma.user.create({
+    const user = await this.prisma.user.create({
       data: {
         email: dto.email,
         passwordHash,
+        // Explicit rather than relying on the schema's column default, so
+        // this stays correct even if that default is ever changed for
+        // other call sites (e.g. Google signup, see AuthService).
+        authProvider: 'email',
       },
     });
+    return sanitizeUser(user);
   }
 
   async update(id: string, dto: UpdateUserDto) {
@@ -74,10 +83,37 @@ export class UsersService {
     // `dto` only contains the fields explicitly provided by the client, each
     // set to a fixed value (no increment/append operations), so applying the
     // same PATCH body twice always converges to the same resource state.
-    return this.prisma.user.update({ where: { id }, data: dto });
+    const user = await this.prisma.user.update({ where: { id }, data: dto });
+    return sanitizeUser(user);
   }
 
-  remove(id: string) {
-    return this.prisma.user.delete({ where: { id } });
+  async remove(id: string) {
+    const user = await this.prisma.user.delete({ where: { id } });
+    return sanitizeUser(user);
+  }
+
+  // One-off backfill for a marketplace-schema migration that added
+  // `authProvider` with a hard DB-level default of 'email': every
+  // pre-existing Google-only account (googleId set, no passwordHash) was
+  // mislabeled as 'email' instead of 'google'. Accounts that *linked* Google
+  // to an existing email/password signup (googleId set AND passwordHash set)
+  // are intentionally left alone - `email` correctly reflects how those were
+  // originally created.
+  //
+  // Safe to run more than once (idempotent): once corrected, rows no longer
+  // match the `authProvider: 'email'` condition. See the corresponding SQL
+  // data migration for the automatic one-time fix applied to existing
+  // databases; this method exists so the same logic can also be re-run
+  // on-demand (e.g. via a manual script) and is covered by tests.
+  async backfillGoogleAuthProvider(): Promise<number> {
+    const { count } = await this.prisma.user.updateMany({
+      where: {
+        googleId: { not: null },
+        passwordHash: null,
+        authProvider: 'email',
+      },
+      data: { authProvider: 'google' },
+    });
+    return count;
   }
 }

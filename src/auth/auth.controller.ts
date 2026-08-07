@@ -113,8 +113,26 @@ export class AuthController {
   @Post('logout')
   @HttpCode(200)
   logout(@Res({ passthrough: true }) res: Response) {
-    res.clearCookie('access_token', { path: '/' });
-    res.clearCookie('refresh_token', { path: '/auth/refresh' });
+    // clearCookie's options must match the ones setAuthCookies() used to SET
+    // these cookies (secure, sameSite) - not just the path. A clearing
+    // Set-Cookie that omits secure/sameSite doesn't reliably overwrite a
+    // cookie that was originally stored with secure:true, sameSite:'none'
+    // (required in production for the cross-origin frontend-shell <-> backend
+    // setup), so logout silently no-ops on the actual cookie in the browser
+    // even though the endpoint returns 200 - the frontend clears its local
+    // state regardless (see authStore.ts logout()), which is what made this
+    // look like it worked until a page refresh re-ran GET /auth/me against
+    // the still-valid cookie.
+    res.clearCookie('access_token', {
+      path: '/',
+      secure: isSecureCookie(),
+      sameSite: getCookieSameSite(),
+    });
+    res.clearCookie('refresh_token', {
+      path: '/auth/refresh',
+      secure: isSecureCookie(),
+      sameSite: getCookieSameSite(),
+    });
     return { message: 'Logged out' };
   }
 

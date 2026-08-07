@@ -216,6 +216,68 @@ describe('AuthController - Google OAuth', () => {
       expect(cookies[0]).toContain('Secure');
     });
   });
+
+  describe('POST /auth/logout', () => {
+    let app: INestApplication<App>;
+
+    const buildApp = async (): Promise<INestApplication<App>> => {
+      const moduleRef: TestingModule = await Test.createTestingModule({
+        controllers: [AuthController],
+        providers: [
+          { provide: AuthService, useValue: authService },
+          { provide: ConfigService, useValue: configService },
+        ],
+      }).compile();
+
+      const nestApp = moduleRef.createNestApplication();
+      await nestApp.init();
+      return nestApp;
+    };
+
+    afterEach(async () => {
+      if (app) await app.close();
+    });
+
+    // Regression test: clearCookie() options must mirror setAuthCookies()'s
+    // secure/sameSite exactly, not just the path. A clearing Set-Cookie that
+    // omits secure/sameSite doesn't reliably overwrite a cookie the browser
+    // stored with Secure+SameSite=None (required in production for the
+    // cross-origin frontend-shell <-> backend setup) - logout would return
+    // 200 and clear local frontend state, but the actual cookie in the
+    // browser would survive, making the user still "logged in" after a
+    // refresh even though the UI showed them as logged out.
+    it('clears both cookies with SameSite=None and Secure in production, matching how they were set', async () => {
+      process.env.NODE_ENV = 'production';
+      app = await buildApp();
+
+      const res = await request(app.getHttpServer()).post('/auth/logout');
+      const cookies = res.headers['set-cookie'] as unknown as string[];
+
+      const accessCookie = cookies.find((c) => c.startsWith('access_token='));
+      const refreshCookie = cookies.find((c) => c.startsWith('refresh_token='));
+
+      expect(accessCookie).toContain('SameSite=None');
+      expect(accessCookie).toContain('Secure');
+      expect(accessCookie).toContain('Path=/');
+
+      expect(refreshCookie).toContain('SameSite=None');
+      expect(refreshCookie).toContain('Secure');
+      expect(refreshCookie).toContain('Path=/auth/refresh');
+    });
+
+    it('clears both cookies with SameSite=Lax and no Secure flag outside production, matching how they were set', async () => {
+      process.env.NODE_ENV = 'development';
+      delete process.env.COOKIE_SAME_SITE;
+      app = await buildApp();
+
+      const res = await request(app.getHttpServer()).post('/auth/logout');
+      const cookies = res.headers['set-cookie'] as unknown as string[];
+
+      const accessCookie = cookies.find((c) => c.startsWith('access_token='));
+      expect(accessCookie).toContain('SameSite=Lax');
+      expect(accessCookie).not.toContain('Secure');
+    });
+  });
 });
 
 // SECURITY: real GET /auth/me flow (real AuthController + real AuthService +

@@ -31,6 +31,12 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    # GitHub Environment "production" - lets Settings -> Environments hold a
+    # required-reviewers protection rule (manual approval gate before this
+    # runs) independently of staging (see deploy-gcp-staging.yml). Runtime
+    # secrets still come from GCP Secret Manager via --set-secrets below, not
+    # from this Environment's own secrets.
+    environment: production
     steps:
       - uses: actions/checkout@v4
 
@@ -43,6 +49,40 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
+
+      # Migracje ZANIM nowy kod się wdroży (nie równolegle, nie po) - kod z
+      # tego SHA może już zakładać nowy schemat. Odpalane wprost z runnera
+      # przeciw prawdziwej produkcyjnej bazie, PRZED podmianą rewizji Cloud
+      # Run - jeśli to się wywali, deploy się w ogóle nie zaczyna (patrz
+      # RUNBOOK.md sekcja 7.3 - to nie jest to samo co rollback bazy, tylko
+      # zapobiega wdrożeniu kodu niezgodnego ze stanem bazy).
+      #
+      # UWAGA: wymaga, żeby github-actions-backend-deploy@ (service account
+      # WIF użyty w tym workflow) miał rolę roles/secretmanager.secretAccessor
+      # na sekrecie DATABASE_URL - deploy Cloud Run tego dotąd nie wymagał
+      # (--set-secrets tylko referencjonuje sekret po nazwie, nie czyta go
+      # bezpośrednio), więc to może być dodatkowe uprawnienie do nadania
+      # ręcznie w GCP IAM, jeśli ten krok padnie na "Permission denied".
+      # $GITHUB_ENV (nie step output) celowo - sekret w step output przeżywa
+      # w danych przebiegu/UI dłużej niż potrzeba; jako env var zmiennej
+      # środowiskowej istnieje tylko w kolejnych krokach TEGO joba.
+      - name: Fetch DATABASE_URL for migrations
+        run: |
+          DATABASE_URL="$(gcloud secrets versions access latest --secret=DATABASE_URL)"
+          echo "::add-mask::$DATABASE_URL"
+          echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+
+      - name: Run database migrations
+        run: pnpm exec prisma migrate deploy
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker europe-central2-docker.pkg.dev

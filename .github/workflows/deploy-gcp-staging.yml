@@ -132,6 +132,11 @@ jobs:
   #              DATABASE_URL_STAGING above) - without it, the `app` project
   #              in e2e-tests is safely skipped (marketing+flows still run),
   #              the job doesn't fail.
+  #              E2E_REPO_PAT (required - fine-grained PAT, Contents:
+  #              Read-only on marketplace-e2e; needed because the ambient
+  #              GITHUB_TOKEN in this run can't check out that repo's own
+  #              code, even though Actions -> Access below permits the
+  #              workflow_call itself - two separate permissions)
   #
   # Requires: e2e-tests (marketplace-e2e) must have Settings -> Actions ->
   # Access allowing access from repos in this organization ("Accessible from
@@ -146,6 +151,7 @@ jobs:
       app_url: ${{ vars.FRONTEND_SHELL_STAGING_URL }}
     secrets:
       E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL_STAGING }}
+      E2E_REPO_CHECKOUT_TOKEN: ${{ secrets.E2E_REPO_PAT }}
 
   promote-to-main:
     needs: e2e

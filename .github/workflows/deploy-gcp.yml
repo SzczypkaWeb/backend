@@ -3,6 +3,12 @@ name: Deploy to Cloud Run
 on:
   push:
     branches: [main]
+  # Runs the same `test` job as a required PR check (branch protection) -
+  # previously this workflow only ran on push, so lint/jest only caught
+  # problems AFTER merging to main, not before. `deploy` stays gated to
+  # `push` only below, so a PR never attempts a real Cloud Run deploy.
+  pull_request:
+    branches: [main]
 
 permissions:
   id-token: write
@@ -30,6 +36,11 @@ jobs:
 
   deploy:
     needs: test
+    # Only a real push to main triggers a deploy - the `pull_request` trigger
+    # above exists solely to run `test` as a required status check; without
+    # this guard a PR run would also try (and fail, lacking OIDC trust for
+    # a PR ref) to authenticate to GCP and deploy.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     # GitHub Environment "production" - lets Settings -> Environments hold a
     # required-reviewers protection rule (manual approval gate before this

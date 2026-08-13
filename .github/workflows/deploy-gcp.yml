@@ -50,22 +50,24 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # Migracje ZANIM nowy kod się wdroży (nie równolegle, nie po) - kod z
-      # tego SHA może już zakładać nowy schemat. Odpalane wprost z runnera
-      # przeciw prawdziwej produkcyjnej bazie, PRZED podmianą rewizji Cloud
-      # Run - jeśli to się wywali, deploy się w ogóle nie zaczyna (patrz
-      # RUNBOOK.md sekcja 7.3 - to nie jest to samo co rollback bazy, tylko
-      # zapobiega wdrożeniu kodu niezgodnego ze stanem bazy).
+      # Migrations BEFORE the new code deploys (not in parallel, not after) -
+      # code at this SHA may already assume the new schema. Run straight from
+      # the runner against the real production database, BEFORE the Cloud Run
+      # revision is swapped - if this fails, the deploy doesn't even start
+      # (see RUNBOOK.md section 7.3 - this isn't the same as a database
+      # rollback, it just prevents deploying code that's incompatible with
+      # the database's current state).
       #
-      # UWAGA: wymaga, żeby github-actions-backend-deploy@ (service account
-      # WIF użyty w tym workflow) miał rolę roles/secretmanager.secretAccessor
-      # na sekrecie DATABASE_URL - deploy Cloud Run tego dotąd nie wymagał
-      # (--set-secrets tylko referencjonuje sekret po nazwie, nie czyta go
-      # bezpośrednio), więc to może być dodatkowe uprawnienie do nadania
-      # ręcznie w GCP IAM, jeśli ten krok padnie na "Permission denied".
-      # $GITHUB_ENV (nie step output) celowo - sekret w step output przeżywa
-      # w danych przebiegu/UI dłużej niż potrzeba; jako env var zmiennej
-      # środowiskowej istnieje tylko w kolejnych krokach TEGO joba.
+      # NOTE: requires github-actions-backend-deploy@ (the WIF service
+      # account used in this workflow) to have the
+      # roles/secretmanager.secretAccessor role on the DATABASE_URL secret -
+      # Cloud Run deploy hasn't needed this so far (--set-secrets only
+      # references the secret by name, doesn't read it directly), so this may
+      # be an extra permission to grant manually in GCP IAM if this step
+      # fails with "Permission denied".
+      # $GITHUB_ENV (not a step output) on purpose - a secret in a step
+      # output lives in the run's data/UI longer than necessary; as an env
+      # var it only exists in later steps of THIS job.
       - name: Fetch DATABASE_URL for migrations
         run: |
           DATABASE_URL="$(gcloud secrets versions access latest --secret=DATABASE_URL)"
@@ -90,7 +92,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push image (amd64 — wymagane przez Cloud Run)
+      - name: Build and push image (amd64 — required by Cloud Run)
         env:
           IMAGE: europe-central2-docker.pkg.dev/szczypka-web-backend/backend/api
         run: |

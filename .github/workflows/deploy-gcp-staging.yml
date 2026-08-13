@@ -1,9 +1,9 @@
 name: Deploy to Cloud Run (staging)
 
-# Osobny plik (nie job w deploy-gcp.yml) celowo - deploy produkcyjny na push do
-# `main` ma zerować ryzyko regresji przez zmiany tutaj. Deployuje do OSOBNEGO
-# Cloud Run service (`backend-staging`), więc żadna rewizja/traffic split nie
-# dotyka prod service (`backend`).
+# Separate file (not a job in deploy-gcp.yml) on purpose - the production
+# deploy on push to `main` should have zero risk of regressions from changes
+# here. Deploys to a SEPARATE Cloud Run service (`backend-staging`), so no
+# revision/traffic split ever touches the prod service (`backend`).
 on:
   push:
     branches: [staging]
@@ -35,14 +35,15 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
-    # Zostawia miejsce na "required reviewers"/protection rules w GitHub
-    # Environments niezależnie od production - patrz Settings -> Environments.
-    # Sekrety runtime (DATABASE_URL_STAGING itd.) i tak żyją w GCP Secret
-    # Manager, nie w tym Environment - `environment:` tutaj to punkt kontroli
-    # nad SAMYM WORKFLOWEM (kto może go odpalić/zatwierdzić), nie nad danymi.
+    # Leaves room for "required reviewers"/protection rules in GitHub
+    # Environments independently of production - see Settings -> Environments.
+    # Runtime secrets (DATABASE_URL_STAGING etc.) still live in GCP Secret
+    # Manager either way, not in this Environment - `environment:` here is a
+    # control point over the WORKFLOW ITSELF (who can run/approve it), not
+    # over the data.
     environment: staging
-    # Job-level output musi być zadeklarowany jawnie - nie propaguje się
-    # automatycznie ze `steps.deploy.outputs.url` do innych jobów bez tego.
+    # Job-level output has to be declared explicitly - it doesn't propagate
+    # automatically from `steps.deploy.outputs.url` to other jobs without this.
     outputs:
       backend_url: ${{ steps.deploy.outputs.url }}
     steps:
@@ -58,11 +59,11 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      # Ten sam mechanizm co w deploy-gcp.yml (produkcja) - migracje ZANIM
-      # nowy kod się wdroży, przeciw OSOBNEJ bazie stagingowej. Wywali się na
-      # "secret not found" dopóki DATABASE_URL_STAGING nie istnieje w GCP
-      # Secret Manager (patrz UWAGA przy kroku "Deploy to Cloud Run (staging)"
-      # niżej) - to samo zamierzone zachowanie, nie bug.
+      # Same mechanism as deploy-gcp.yml (production) - migrations BEFORE the
+      # new code deploys, against the SEPARATE staging database. Will fail
+      # with "secret not found" until DATABASE_URL_STAGING exists in GCP
+      # Secret Manager (see the NOTE on the "Deploy to Cloud Run (staging)"
+      # step below) - that's the intended behavior, not a bug.
       - name: Fetch DATABASE_URL_STAGING for migrations
         run: |
           DATABASE_URL="$(gcloud secrets versions access latest --secret=DATABASE_URL_STAGING)"
@@ -87,10 +88,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Bez tagu `:latest` - ten tag ma znaczyć "aktualny prod" bez dwuznaczności,
-      # image do stagingu jest referencjonowany przez gcloud run deploy poniżej
-      # wyłącznie po tagu z SHA.
-      - name: Build and push image (amd64 — wymagane przez Cloud Run)
+      # No `:latest` tag - that tag is meant to mean "current prod" without
+      # ambiguity, the staging image is referenced by gcloud run deploy below
+      # exclusively by its SHA tag.
+      - name: Build and push image (amd64 — required by Cloud Run)
         env:
           IMAGE: europe-central2-docker.pkg.dev/szczypka-web-backend/backend/api
         run: |
@@ -98,12 +99,13 @@ jobs:
             -t $IMAGE:staging-${{ github.sha }} \
             --push .
 
-      # UWAGA: wymaga wcześniejszego ręcznego założenia w GCP Secret Manager
-      # sekretów z sufiksem _STAGING (DATABASE_URL_STAGING wskazujący na
-      # OSOBNĄ bazę/projekt Supabase, nie na produkcyjną - patrz DECISIONS.md
-      # w infra/ nt. kosztu drugiego darmowego projektu Supabase). Do czasu
-      # ich założenia ten krok się wywali na "secret not found" - to zamierzone,
-      # nie ma bezpiecznego fallbacku na sekrety produkcyjne.
+      # NOTE: requires the _STAGING-suffixed secrets to already exist in GCP
+      # Secret Manager, created manually beforehand (DATABASE_URL_STAGING
+      # pointing at a SEPARATE Supabase project/database, not production -
+      # see DECISIONS.md in infra/ about the cost of a second free Supabase
+      # project). Until they're created, this step fails with "secret not
+      # found" - that's intended, there's no safe fallback to production
+      # secrets.
       - name: Deploy to Cloud Run (staging)
         id: deploy
         run: |
@@ -117,32 +119,33 @@ jobs:
             --format='value(status.url)')
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
-  # UWAGA - stan na teraz: frontend-shell/react-app/next-app NIE MAJĄ jeszcze
-  # własnych staging deployów (tylko backend, ten workflow). `app_url` poniżej
-  # to wciąż placeholder z e2e-tests/.github/workflows/e2e.yml
-  # (https://staging-app.domena.pl), więc dopóki frontendy nie mają realnego
-  # stagingu wskazującego na backend-staging, projekt `app` (auth przez
-  # prawdziwy backend) i tak nie ma czego testować - dlatego `secrets:`
-  # (E2E_DATABASE_URL) jest CELOWO zakomentowane niżej. Odkomentuj i dodaj
-  # `app_url: <staging frontend-shell URL>` dopiero gdy task #45 (frontend
-  # staging pipelines) jest zrobiony, i dodaj sekret E2E_DATABASE_URL_STAGING
-  # w Settings tego repo (wartość = ta sama baza co DATABASE_URL_STAGING wyżej).
+  # #45 done: react-app and frontend-shell now have their own staging deploys
+  # (push to `staging`, a persistent named environment on the same SWA
+  # resource - see their workflows). `app_url` below points at
+  # frontend-shell's staging URL instead of the placeholder from
+  # e2e-tests/.github/workflows/e2e.yml.
   #
-  # Do tego czasu ten job i tak ma realną wartość: testuje marketing+flows
-  # przeciw staging (o ile ten staging istnieje) po KAŻDEJ zmianie backendu.
+  # Requires setting up in this repo's (backend) Settings before it actually
+  # works:
+  #   Variables: FRONTEND_SHELL_STAGING_URL
+  #   Secrets:   E2E_DATABASE_URL_STAGING (the same database as
+  #              DATABASE_URL_STAGING above) - without it, the `app` project
+  #              in e2e-tests is safely skipped (marketing+flows still run),
+  #              the job doesn't fail.
   #
-  # Wymaga: e2e-tests (marketplace-e2e) musi mieć w Settings -> Actions ->
-  # Access dopuszczony dostęp z repo tej organizacji ("Accessible from
-  # repositories in the 'szczypkaweb' organization") - inaczej to wywołanie
-  # reusable workflow z innego repo dostanie 404/permission error, nawet przy
-  # poprawnym GITHUB_TOKEN.
+  # Requires: e2e-tests (marketplace-e2e) must have Settings -> Actions ->
+  # Access allowing access from repos in this organization ("Accessible from
+  # repositories in the 'szczypkaweb' organization") - otherwise this
+  # reusable-workflow call from another repo gets a 404/permission error,
+  # even with a valid GITHUB_TOKEN.
   e2e:
     needs: deploy
     uses: szczypkaweb/marketplace-e2e/.github/workflows/e2e.yml@main
     with:
       api_url: ${{ needs.deploy.outputs.backend_url }}
-    # secrets:
-    #   E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL_STAGING }}   # TODO: odkomentować po #45
+      app_url: ${{ vars.FRONTEND_SHELL_STAGING_URL }}
+    secrets:
+      E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL_STAGING }}
 
   promote-to-main:
     needs: e2e
@@ -150,8 +153,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      # Placeholder - jednoklikowy promote, nie auto-merge. Zamień na realne
-      # otwarcie/merge PR staging -> main (np. `gh pr create --base main --head
-      # staging --fill` + opcjonalnie `gh pr merge --auto`) kiedy backend ma już
-      # branch protection i jest jasne, czy promote ma być w pełni automatyczny.
-      - run: echo "e2e przeszło na staging - gotowe do promote staging -> main."
+      # Placeholder - a one-click promote, not an auto-merge. Replace with a
+      # real staging -> main PR open/merge (e.g. `gh pr create --base main
+      # --head staging --fill` + optionally `gh pr merge --auto`) once backend
+      # has branch protection and it's clear whether promote should be fully
+      # automatic.
+      - run: echo "e2e passed on staging - ready to promote staging -> main."

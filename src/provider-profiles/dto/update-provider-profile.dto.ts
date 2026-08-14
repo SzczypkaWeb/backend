@@ -35,7 +35,7 @@ export class UpdateProviderProfileDto {
 
   @IsOptional()
   @IsNumber()
-  @Min(0.1)
+  @Min(1)
   @Max(1000)
   serviceRadiusKm?: number;
 

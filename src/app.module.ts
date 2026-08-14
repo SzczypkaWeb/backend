@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ListingsModule } from './listings/listings.module';
 import { ServiceCategoriesModule } from './service-categories/service-categories.module';
+import { ProviderProfilesModule } from './provider-profiles/provider-profiles.module';
 import { AuthController } from './auth/auth.controller';
 import { AuthModule } from './auth/auth.module';
 import { validateEnv } from './config/env.validation';
@@ -21,6 +22,7 @@ import { APP_FILTER } from '@nestjs/core';
     PrismaModule,
     ListingsModule,
     ServiceCategoriesModule,
+    ProviderProfilesModule,
     AuthModule,
     SentryModule.forRoot(),
   ],

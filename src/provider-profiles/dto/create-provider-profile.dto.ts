@@ -1,8 +1,8 @@
-import { IsString, IsNumber, IsOptional, MinLength } from 'class-validator';
+import { IsString, IsNumber, IsOptional, MinLength, Min, Max } from 'class-validator';
+import { IsValidNip } from '../../common/validators/is-valid-nip.validator';
 
 export class CreateProviderProfileDto {
-  @IsString()
-  @MinLength(1)
+  @IsValidNip()
   nip: string;
 
   @IsString()
@@ -14,9 +14,13 @@ export class CreateProviderProfileDto {
   companyAddress: string;
 
   @IsNumber()
+  @Min(-90)
+  @Max(90)
   baseLat: number;
 
   @IsNumber()
+  @Min(-180)
+  @Max(180)
   baseLng: number;
 
   @IsString()
@@ -24,6 +28,8 @@ export class CreateProviderProfileDto {
   baseAddress: string;
 
   @IsNumber()
+  @Min(0.1)
+  @Max(1000)
   serviceRadiusKm: number;
 
   @IsOptional()

@@ -1,10 +1,15 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import type { Request } from 'express';
 import { ProviderProfilesController } from './provider-profiles.controller';
 import { ProviderProfilesService } from './provider-profiles.service';
 import { CreateProviderProfileDto } from './dto/create-provider-profile.dto';
 import { UpdateProviderProfileDto } from './dto/update-provider-profile.dto';
 import { AddProviderCategoryDto } from './dto/add-provider-category.dto';
+
+interface RequestWithUser extends Request {
+  user: { userId: string; email: string };
+}
 
 describe('ProviderProfilesController', () => {
   let controller: ProviderProfilesController;
@@ -17,6 +22,12 @@ describe('ProviderProfilesController', () => {
   };
 
   const mockUser = { userId: 'user-123', email: 'test@example.com' };
+
+  // Helper function to create a properly typed mock request
+  const createMockRequest = (user: typeof mockUser): RequestWithUser =>
+    ({
+      user,
+    }) as unknown as RequestWithUser;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -35,7 +46,7 @@ describe('ProviderProfilesController', () => {
   describe('create', () => {
     it('creates a new provider profile for the authenticated user', async () => {
       const dto: CreateProviderProfileDto = {
-        nip: '1234567890',
+        nip: '1234567893', // Valid NIP with correct checksum
         companyName: 'Test Company',
         companyAddress: 'Test Address',
         baseLat: 50.0,
@@ -56,7 +67,7 @@ describe('ProviderProfilesController', () => {
 
       providerProfilesService.create.mockResolvedValue(created);
 
-      const result = await controller.create({ user: mockUser } as any, dto);
+      const result = await controller.create(createMockRequest(mockUser), dto);
 
       expect(providerProfilesService.create).toHaveBeenCalledWith('user-123', dto);
       expect(result).toEqual(created);
@@ -64,7 +75,7 @@ describe('ProviderProfilesController', () => {
 
     it('throws ConflictException if user already has a profile', async () => {
       const dto: CreateProviderProfileDto = {
-        nip: '1234567890',
+        nip: '1234567893', // Valid NIP with correct checksum
         companyName: 'Test Company',
         companyAddress: 'Test Address',
         baseLat: 50.0,
@@ -77,7 +88,7 @@ describe('ProviderProfilesController', () => {
         new ConflictException('User already has a provider profile'),
       );
 
-      await expect(controller.create({ user: mockUser } as any, dto)).rejects.toThrow(
+      await expect(controller.create(createMockRequest(mockUser), dto)).rejects.toThrow(
         ConflictException,
       );
     });
@@ -88,7 +99,7 @@ describe('ProviderProfilesController', () => {
       const profile = {
         id: 'profile-123',
         userId: 'user-123',
-        nip: '1234567890',
+        nip: '1234567893', // Valid NIP with correct checksum
         companyName: 'Test Company',
         companyAddress: 'Test Address',
         baseLat: 50.0,
@@ -104,7 +115,7 @@ describe('ProviderProfilesController', () => {
 
       providerProfilesService.getOwn.mockResolvedValue(profile);
 
-      const result = await controller.getOwn({ user: mockUser } as any);
+      const result = await controller.getOwn(createMockRequest(mockUser));
 
       expect(providerProfilesService.getOwn).toHaveBeenCalledWith('user-123');
       expect(result).toEqual(profile);
@@ -115,7 +126,9 @@ describe('ProviderProfilesController', () => {
         new NotFoundException('Provider profile not found'),
       );
 
-      await expect(controller.getOwn({ user: mockUser } as any)).rejects.toThrow(NotFoundException);
+      await expect(controller.getOwn(createMockRequest(mockUser))).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -128,7 +141,7 @@ describe('ProviderProfilesController', () => {
       const updated = {
         id: 'profile-123',
         userId: 'user-123',
-        nip: '1234567890',
+        nip: '1234567893', // Valid NIP with correct checksum
         companyName: 'Test Company',
         companyAddress: 'Test Address',
         baseLat: 50.0,
@@ -143,7 +156,7 @@ describe('ProviderProfilesController', () => {
 
       providerProfilesService.updateOwn.mockResolvedValue(updated);
 
-      const result = await controller.updateOwn({ user: mockUser } as any, dto);
+      const result = await controller.updateOwn(createMockRequest(mockUser), dto);
 
       expect(providerProfilesService.updateOwn).toHaveBeenCalledWith('user-123', dto);
       expect(result).toEqual(updated);
@@ -156,7 +169,7 @@ describe('ProviderProfilesController', () => {
         new NotFoundException('Provider profile not found'),
       );
 
-      await expect(controller.updateOwn({ user: mockUser } as any, dto)).rejects.toThrow(
+      await expect(controller.updateOwn(createMockRequest(mockUser), dto)).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -168,7 +181,7 @@ describe('ProviderProfilesController', () => {
 
       providerProfilesService.addCategory.mockResolvedValue(undefined);
 
-      await controller.addCategory({ user: mockUser } as any, dto);
+      await controller.addCategory(createMockRequest(mockUser), dto);
 
       expect(providerProfilesService.addCategory).toHaveBeenCalledWith('user-123', 'category-123');
     });
@@ -180,7 +193,7 @@ describe('ProviderProfilesController', () => {
         new NotFoundException('Provider profile not found'),
       );
 
-      await expect(controller.addCategory({ user: mockUser } as any, dto)).rejects.toThrow(
+      await expect(controller.addCategory(createMockRequest(mockUser), dto)).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -192,7 +205,7 @@ describe('ProviderProfilesController', () => {
         new NotFoundException('Service category not found'),
       );
 
-      await expect(controller.addCategory({ user: mockUser } as any, dto)).rejects.toThrow(
+      await expect(controller.addCategory(createMockRequest(mockUser), dto)).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -204,7 +217,7 @@ describe('ProviderProfilesController', () => {
         new ConflictException('Category already added to provider'),
       );
 
-      await expect(controller.addCategory({ user: mockUser } as any, dto)).rejects.toThrow(
+      await expect(controller.addCategory(createMockRequest(mockUser), dto)).rejects.toThrow(
         ConflictException,
       );
     });
@@ -216,7 +229,7 @@ describe('ProviderProfilesController', () => {
 
       providerProfilesService.removeCategory.mockResolvedValue(undefined);
 
-      await controller.removeCategory({ user: mockUser } as any, categoryId);
+      await controller.removeCategory(createMockRequest(mockUser), categoryId);
 
       expect(providerProfilesService.removeCategory).toHaveBeenCalledWith('user-123', categoryId);
     });
@@ -229,7 +242,7 @@ describe('ProviderProfilesController', () => {
       );
 
       await expect(
-        controller.removeCategory({ user: mockUser } as any, categoryId),
+        controller.removeCategory(createMockRequest(mockUser), categoryId),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -241,7 +254,7 @@ describe('ProviderProfilesController', () => {
       );
 
       await expect(
-        controller.removeCategory({ user: mockUser } as any, categoryId),
+        controller.removeCategory(createMockRequest(mockUser), categoryId),
       ).rejects.toThrow(NotFoundException);
     });
   });

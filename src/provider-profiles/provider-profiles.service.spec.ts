@@ -40,7 +40,7 @@ describe('ProviderProfilesService', () => {
     it('creates a new provider profile for a user', async () => {
       const userId = 'user-123';
       const dto: CreateProviderProfileDto = {
-        nip: '1234567890',
+        nip: '1234567893', // Valid NIP with correct checksum
         companyName: 'Test Company',
         companyAddress: 'Test Address',
         baseLat: 50.0,
@@ -75,7 +75,7 @@ describe('ProviderProfilesService', () => {
     it('throws ConflictException if user already has a profile', async () => {
       const userId = 'user-123';
       const dto: CreateProviderProfileDto = {
-        nip: '1234567890',
+        nip: '1234567893', // Valid NIP with correct checksum
         companyName: 'Test Company',
         companyAddress: 'Test Address',
         baseLat: 50.0,
@@ -104,7 +104,7 @@ describe('ProviderProfilesService', () => {
       const profile = {
         id: 'profile-123',
         userId,
-        nip: '1234567890',
+        nip: '1234567893', // Valid NIP with correct checksum
         companyName: 'Test Company',
         companyAddress: 'Test Address',
         baseLat: 50.0,
@@ -160,7 +160,7 @@ describe('ProviderProfilesService', () => {
       const updated = {
         id: 'profile-123',
         userId,
-        nip: '1234567890',
+        nip: '1234567893', // Valid NIP with correct checksum
         companyName: 'Test Company',
         companyAddress: 'Test Address',
         baseLat: 50.0,

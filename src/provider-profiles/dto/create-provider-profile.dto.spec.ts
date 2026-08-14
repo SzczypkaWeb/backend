@@ -163,10 +163,25 @@ describe('CreateProviderProfileDto', () => {
     it('accepts minimum service radius', async () => {
       const dto = plainToInstance(CreateProviderProfileDto, {
         ...validDto,
-        serviceRadiusKm: 0.1,
+        serviceRadiusKm: 1,
       });
       const errors = await validate(dto);
       expect(errors.filter((e) => e.property === 'serviceRadiusKm')).toHaveLength(0);
+    });
+
+    it('rejects fractional service radius below the minimum whole kilometer', async () => {
+      // serviceRadiusKm is Int in the Prisma schema - anything below 1 would
+      // silently truncate to 0 on save (which itself is rejected below), so
+      // the DTO must reject fractional values outright rather than accept
+      // them and let Prisma's cast to Int corrupt the stored value.
+      const dto = plainToInstance(CreateProviderProfileDto, {
+        ...validDto,
+        serviceRadiusKm: 0.5,
+      });
+      const errors = await validate(dto);
+      const radiusErrors = errors.filter((e) => e.property === 'serviceRadiusKm');
+      expect(radiusErrors.length).toBeGreaterThan(0);
+      expect(radiusErrors[0].constraints?.min).toBeDefined();
     });
 
     it('accepts maximum service radius', async () => {

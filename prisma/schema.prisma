@@ -36,6 +36,10 @@ model User {
   providerProfile ProviderProfile?
   clientProfile   ClientProfile?
   phoneOtps       PhoneOtp[]
+
+  sentMessages          Message[]
+  assistantConversations AssistantConversation[]
+  context               UserContext?
 }
 
 enum AuthProvider {
@@ -118,6 +122,8 @@ model ProviderProfile {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  conversations Conversation[]
 }
 
 model ProviderCategory {
@@ -137,6 +143,7 @@ model ClientProfile {
   user   User   @relation(fields: [userId], references: [id])
 
   serviceRequests ServiceRequest[]
+  conversations   Conversation[]
 
   createdAt DateTime @default(now())
 }
@@ -174,9 +181,10 @@ model ServiceRequest {
 
   status ServiceRequestStatus @default(open)
 
-  photos    RequestPhoto[]
-  quotes    Quote[]
-  createdAt DateTime       @default(now())
+  photos        RequestPhoto[]
+  quotes        Quote[]
+  conversations Conversation[]
+  createdAt     DateTime       @default(now())
 
   @@index([status, categoryId])
 }
@@ -231,6 +239,151 @@ model PhoneOtp {
   verifiedAt DateTime?
 
   @@index([userId])
+}
+
+// --- Messaging + shared cross-module context -------------------------------
+//
+// Two independent "chat modules": real human-to-human Conversation/Message
+// (client <-> provider, scoped to one ServiceRequest since a request can have
+// several providers quoting, each gets its own thread), and AssistantConversation/
+// AssistantMessage (user <-> AI assistant, e.g. "help me describe my request").
+// Both read/write UserContext - a single per-user row that acts as the shared
+// memory the two modules communicate through (recent searches, recently viewed
+// listings, a rolling AI-maintained summary of what the user is currently doing).
+
+model Conversation {
+  id String @id @default(uuid())
+
+  requestId String
+  request   ServiceRequest @relation(fields: [requestId], references: [id])
+
+  clientId String
+  client   ClientProfile @relation(fields: [clientId], references: [id])
+
+  providerId String
+  provider   ProviderProfile @relation(fields: [providerId], references: [id])
+
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One thread per (request, provider) pair - not per request alone, since
+  // several providers can quote the same request and each needs its own thread.
+  @@unique([requestId, providerId])
+  @@index([clientId])
+  @@index([providerId])
+}
+
+model Message {
+  id String @id @default(uuid())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+
+  // Whichever User sent it - could be the client or the provider's user
+  // account, no separate "role" needed since Conversation already knows both.
+  senderId String
+  sender   User   @relation(fields: [senderId], references: [id])
+
+  body String
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+enum AssistantMessageRole {
+  user
+  assistant
+}
+
+model AssistantConversation {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  // Optional, short auto-generated label (e.g. first user message truncated)
+  // so a history list can show something other than a timestamp.
+  title String?
+
+  messages AssistantMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model AssistantMessage {
+  id String @id @default(uuid())
+
+  conversationId String
+  conversation   AssistantConversation @relation(fields: [conversationId], references: [id])
+
+  role    AssistantMessageRole
+  content String
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model UserContext {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  // Free-form, lightweight cross-module memory - deliberately Json rather
+  // than normalized tables for v1: both the messaging module and the
+  // assistant module read/write this, and its shape will keep growing
+  // (search history once #21 lands, viewed listings, etc.) - Json avoids a
+  // migration every time a new kind of memory gets added.
+  recentSearches Json @default("[]")
+  recentlyViewed Json @default("[]")
+
+  // Rolling summary the AI assistant maintains and reads across both
+  // modules, e.g. "client requesting a plumbing quote in Krakow, spoke to 2
+  // providers, narrowing down on price" - this is the actual "shared memory"
+  // the two chat modules communicate through, distinct from raw message history.
+  summary String?
+
+  updatedAt DateTime @updatedAt
+}
+
+// One row per orchestrator run (one repo/task pair from lead.py's subtask
+// breakdown) - holds the final outcome that today only gets printed to the
+// terminal (branch, PR URL, verdict). ExecutionMetric stays as the granular
+// per-node-call telemetry log; this is the run-level summary the dashboard's
+// history view reads. Same runId as the ExecutionMetric rows it's grouped
+// with - written directly over Postgres from orchestrator/control_server.py,
+// same as telemetry.py.
+enum OrchestratorRunStatus {
+  running
+  done
+  blocked
+  failed
+}
+
+model OrchestratorRun {
+  id String @id @default(uuid())
+
+  runId           String                @unique
+  repo            String
+  taskDescription String
+  status          OrchestratorRunStatus @default(running)
+
+  branch String?
+  prUrl  String?
+
+  reviewVerdict String?
+  reviewNotes   String?
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([status, startedAt])
 }
 
 // Cost/telemetry log for the Python orchestrator (../orchestrator), NOT

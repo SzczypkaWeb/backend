@@ -232,3 +232,55 @@ model PhoneOtp {
 
   @@index([userId])
 }
+
+// Cost/telemetry log for the Python orchestrator (../orchestrator), NOT
+// written to via Prisma/Nest - the orchestrator has no Node runtime, so it
+// writes here directly over Postgres (asyncpg) using this same DATABASE_URL.
+// This model exists purely so the table's shape is version-controlled and
+// migrated the same way as the rest of the schema; see orchestrator/telemetry.py
+// for the actual INSERT and orchestrator/nodes.py for the call sites (one row
+// per provider call: classify_task's Groq/Gemini/Claude-Haiku attempts, each
+// writer attempt, each security_review attempt).
+model ExecutionMetric {
+  id String @id @default(uuid())
+
+  // Groups every row from one `main.py`/`lead.py` invocation together - a
+  // single task can produce several rows (classify + writer + review, or
+  // more on a review-retry loop). Generated in orchestrator/repos.py's
+  // initial_state_for(), NOT a foreign key - the orchestrator doesn't have
+  // (and shouldn't need) a corresponding "run" row of its own here.
+  runId String
+
+  // Which of REPOS' keys this run targeted (backend, frontend-shell, ...) -
+  // see orchestrator/repos.py.
+  repo String
+
+  // Which graph node produced this call: classify_task, writer, security_review.
+  node String
+
+  // Which provider actually served the call: groq, gemini, or claude.
+  provider String
+  model    String
+
+  inputTokens  Int?
+  outputTokens Int?
+
+  // Only populated for Claude Agent SDK calls - ResultMessage.total_cost_usd
+  // already accounts for the real per-model pricing, so it's stored as-is
+  // rather than recomputed from token counts. Groq/Gemini rows leave this
+  // null (their APIs don't return a cost figure) - token counts are the
+  // proxy for cost on those rows.
+  totalCostUsd Decimal? @db.Decimal(10, 4)
+
+  durationMs Int
+  success    Boolean
+
+  // Populated on failed attempts (provider errors, transient retries that
+  // ultimately gave up) - null on success.
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  @@index([runId])
+  @@index([repo, createdAt])
+}

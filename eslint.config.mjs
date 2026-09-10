@@ -26,7 +26,12 @@ export default tseslint.config(
   },
   {
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
+      // Was 'off' - silently let `any` through both human and
+      // orchestrator-written code (see BLOG_NOTES.md: a reviewer caught
+      // `validate(value: any)` in is-valid-nip.validator.ts post-merge,
+      // because `pnpm lint` genuinely couldn't have caught it). `unknown` +
+      // a type guard is always available where `any` would otherwise go.
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
       "prettier/prettier": ["error", { endOfLine: "auto" }],

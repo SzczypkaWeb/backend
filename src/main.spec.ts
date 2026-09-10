@@ -10,6 +10,24 @@ jest.mock('argon2', () => ({
   verify: jest.fn().mockResolvedValue(true),
 }));
 
+// @nestjs/swagger's compiled output is ESM-only (uses `import.meta.url`
+// internally) and can't be transpiled to CommonJS for Jest without breaking
+// (it redeclares `require`, which CJS already provides). This test doesn't
+// exercise Swagger's actual behavior - it only checks bootstrap()'s CORS/
+// cookie-parser wiring - so mocking the module out entirely avoids ever
+// loading that real file, rather than fighting Jest/ESM interop.
+jest.mock('@nestjs/swagger', () => ({
+  SwaggerModule: {
+    createDocument: jest.fn(),
+    setup: jest.fn(),
+  },
+  DocumentBuilder: jest.fn().mockImplementation(() => ({
+    setTitle: jest.fn().mockReturnThis(),
+    setVersion: jest.fn().mockReturnThis(),
+    build: jest.fn(),
+  })),
+}));
+
 import { NestFactory } from '@nestjs/core';
 import { bootstrap } from './main';
 

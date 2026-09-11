@@ -7,5 +7,12 @@
     // dist/src/main.js. See the comment on tsconfig.json's rootDir.
     "rootDir": "./src"
   },
+  // Explicit include, not just the excludes below: without this, the base
+  // config's default "everything in the project" pattern also pulls in
+  // root-level/prisma/ scripts (prisma.config.ts, prisma/seed.ts,
+  // prisma/backfill-google-auth-provider.ts) - those are run standalone via
+  // ts-node (see package.json scripts), never meant to be part of the Nest
+  // build, and TS6059-fail against rootDir "./src" above.
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
 }

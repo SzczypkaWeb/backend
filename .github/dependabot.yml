@@ -1,8 +1,13 @@
 version: 2
 
 updates:
+  # target-branch: staging, not main - dependency bumps go through the same
+  # staging validation (deploy + e2e) as any other change before promotion,
+  # same reasoning as orchestrator/repos.py's target_branch (see RUNBOOK.md
+  # section 4).
   - package-ecosystem: "npm"
     directory: "/"
+    target-branch: "staging"
     schedule:
       interval: "daily"
     open-pull-requests-limit: 10

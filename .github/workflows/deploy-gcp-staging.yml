@@ -51,7 +51,7 @@ jobs:
 
       - id: auth
         name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: 'projects/416578348143/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
           service_account: 'github-actions-backend-deploy@szczypka-web-backend.iam.gserviceaccount.com'

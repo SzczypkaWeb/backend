@@ -10,13 +10,23 @@ jest.mock('argon2', () => ({
   verify: jest.fn().mockResolvedValue(true),
 }));
 
-// @nestjs/swagger's compiled output is ESM-only (uses `import.meta.url`
-// internally) and can't be transpiled to CommonJS for Jest without breaking
-// (it redeclares `require`, which CJS already provides). This test doesn't
-// exercise Swagger's actual behavior - it only checks bootstrap()'s CORS/
-// cookie-parser wiring - so mocking the module out entirely avoids ever
-// loading that real file, rather than fighting Jest/ESM interop.
+// SwaggerModule.createDocument/setup expect a real Nest application
+// instance (HTTP adapter, reflector, etc.), which `appMock` below isn't -
+// calling the real ones here would throw. This test doesn't exercise
+// Swagger's actual behavior anyway (it only checks bootstrap()'s CORS/
+// cookie-parser wiring), so those two are mocked out.
+//
+// PartialType also needs a stub: it's evaluated at *import time*
+// (`UpdateUserDto extends PartialType(CreateUserDto)`), as soon as
+// something in the AppModule import chain pulls in update-user.dto.ts -
+// so a missing/non-function value here throws immediately, before any
+// test body runs. We don't need the real field-optionality behavior (this
+// suite never touches UpdateUserDto), so a pass-through that just returns
+// the class unchanged is enough - and, unlike re-requiring the real
+// @nestjs/swagger module here, it can't reintroduce any module-loading
+// quirks of its own.
 jest.mock('@nestjs/swagger', () => ({
+  PartialType: (classRef: new (...args: unknown[]) => unknown) => classRef,
   SwaggerModule: {
     createDocument: jest.fn(),
     setup: jest.fn(),

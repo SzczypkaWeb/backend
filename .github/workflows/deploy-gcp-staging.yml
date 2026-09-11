@@ -22,8 +22,8 @@ jobs:
       FRONTEND_ORIGIN: http://localhost:8080
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: pnpm
@@ -51,13 +51,13 @@ jobs:
 
       - id: auth
         name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: 'projects/416578348143/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
           service_account: 'github-actions-backend-deploy@szczypka-web-backend.iam.gserviceaccount.com'
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
 
       # Same mechanism as deploy-gcp.yml (production) - migrations BEFORE the
       # new code deploys, against the SEPARATE staging database. Will fail
@@ -70,8 +70,8 @@ jobs:
           echo "::add-mask::$DATABASE_URL"
           echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
 
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: pnpm
@@ -86,7 +86,7 @@ jobs:
         run: gcloud auth configure-docker europe-central2-docker.pkg.dev
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # No `:latest` tag - that tag is meant to mean "current prod" without
       # ambiguity, the staging image is referenced by gcloud run deploy below

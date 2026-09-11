@@ -1,4 +1,11 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Overrides the base config's "." back to "./src" - this build only
+    // ever compiles src/** (test/ is excluded below), so the tighter,
+    // correct rootDir keeps dist/main.js flat instead of nesting under
+    // dist/src/main.js. See the comment on tsconfig.json's rootDir.
+    "rootDir": "./src"
+  },
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
 }

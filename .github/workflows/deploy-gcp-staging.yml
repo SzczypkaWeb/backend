@@ -7,14 +7,21 @@ name: Deploy to Cloud Run (staging)
 on:
   push:
     branches: [staging]
-
-permissions:
-  id-token: write
-  contents: read
+  # Runs the same `test` job as a required PR check (branch protection on
+  # `staging`) - without this, no workflow ever fires for a PR targeting
+  # `staging` at all, so the required "test" check has nothing to report a
+  # status back to GitHub, and every such PR (in practice, every Dependabot
+  # version-bump PR, since those target `staging`) sits stuck forever on
+  # "Waiting for status to be reported". `deploy` stays gated to `push` only
+  # below, same reasoning as deploy-gcp.yml.
+  pull_request:
+    branches: [staging]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       GOOGLE_CLIENT_ID: test-client-id
       GOOGLE_CLIENT_SECRET: test-client-secret
@@ -34,7 +41,19 @@ jobs:
 
   deploy:
     needs: test
+    # Only a real push to staging triggers a deploy - the `pull_request`
+    # trigger above exists solely to run `test` as a required status check;
+    # without this guard a PR run would also try (and fail, lacking OIDC
+    # trust for a PR ref) to authenticate to GCP and deploy.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    # id-token: write lives here, not at the workflow level - see
+    # deploy-gcp.yml's `deploy` job for why (GitHub withholds OIDC id-token
+    # from Dependabot-triggered runs; scoping it to the job that actually
+    # needs it, which only ever runs on `push`, avoids that conflict).
+    permissions:
+      id-token: write
+      contents: read
     # Leaves room for "required reviewers"/protection rules in GitHub
     # Environments independently of production - see Settings -> Environments.
     # Runtime secrets (DATABASE_URL_STAGING etc.) still live in GCP Secret

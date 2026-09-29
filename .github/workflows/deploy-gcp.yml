@@ -10,13 +10,11 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  id-token: write
-  contents: read
-
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       GOOGLE_CLIENT_ID: test-client-id
       GOOGLE_CLIENT_SECRET: test-client-secret
@@ -42,6 +40,20 @@ jobs:
     # a PR ref) to authenticate to GCP and deploy.
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    # id-token: write lives here, not at the workflow level, on purpose: only
+    # this job actually needs it (for GCP's OIDC auth below), and GitHub
+    # silently withholds id-token from workflow runs triggered by
+    # dependabot[bot] as a supply-chain hardening measure. When this
+    # permission was declared workflow-wide, that restriction seemed to
+    # prevent the whole run (including the unrelated `test` job below, which
+    # never needed it) from reporting a status at all - leaving the `test`
+    # required check stuck on "Waiting for status to be reported" forever on
+    # every Dependabot PR. Scoping it to just `deploy` - which only runs on
+    # `push`, never on a Dependabot-authored PR - avoids the conflict
+    # entirely.
+    permissions:
+      id-token: write
+      contents: read
     # GitHub Environment "production" - lets Settings -> Environments hold a
     # required-reviewers protection rule (manual approval gate before this
     # runs) independently of staging (see deploy-gcp-staging.yml). Runtime

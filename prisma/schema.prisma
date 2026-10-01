@@ -437,3 +437,17 @@ model ExecutionMetric {
   @@index([runId])
   @@index([repo, createdAt])
 }
+
+model RunEvent {
+  id String @id @default(uuid())
+  runId String
+  repo String
+  node      String
+  provider  String
+  status    String
+  detail    String?
+  prUrl     String?
+  createdAt DateTime @default(now())
+
+  @@index([runId])
+}

@@ -13,6 +13,34 @@ updates:
     open-pull-requests-limit: 10
     commit-message:
       prefix: "chore"
+    # These are the runtime-facing @nestjs/* packages that have already
+    # broken Jest three separate times (swagger, mapped-types, passport -
+    # see BLOG_NOTES.md) by shipping a major-version bump that's pure ESM,
+    # with no CJS build, while @nestjs/common/core stay on 11.x. A major
+    # bump here needs a human to check for a CJS-compatible release (or a
+    # redirect, like mapped-types -> swagger) before it can land at all, so
+    # Dependabot shouldn't keep re-opening a PR that's doomed to fail `test`.
+    # Patch/minor bumps are unaffected and still flow through auto-merge.
+    # @nestjs/cli and @nestjs/schematics are deliberately excluded - dev-only
+    # codegen tooling, not `require()`'d by app/test code, and @nestjs/cli
+    # already tracks its own major (12.x) independently without issue.
+    ignore:
+      - dependency-name: "@nestjs/common"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@nestjs/core"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@nestjs/config"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@nestjs/jwt"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@nestjs/passport"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@nestjs/platform-express"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@nestjs/swagger"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@nestjs/testing"
+        update-types: ["version-update:semver-major"]
 
   # Bumps action versions used in workflow YAML (e.g. actions/checkout@vX) -
   # cheap and safe to automate, easy to forget by hand.
